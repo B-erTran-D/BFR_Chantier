@@ -138,21 +138,125 @@
   }
 
   /* ===================== Calcul du bilan chantier & jour ============== */
-  function datesJoursTriees(chantier, dateIncluse) {
-    const set = new Set();
-    if (chantier && chantier.jours && typeof chantier.jours === 'object') {
-      Object.keys(chantier.jours).forEach(d => { if (/^\d{4}-\d{2}-\d{2}$/.test(d)) set.add(d); });
+  function estIsoDate(s) {
+    return /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''));
+  }
+
+  function aujourdhuiLocalISO() {
+    const d = new Date();
+    const pad = (n) => ('0' + n).slice(-2);
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  }
+
+  function estWeekEnd(iso) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ''));
+    if (!m) return false;
+    const wd = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).getDay();
+    return wd === 0 || wd === 6;
+  }
+
+  /** Génère la liste triée des journées planifiées entre dateDebut (J1) et dateFin. */
+  function genererDatesPeriode(dateDebut, dateFin, inclureWeekEnd, joursExclus) {
+    if (!estIsoDate(dateDebut)) return [];
+    const fin = (estIsoDate(dateFin) && dateFin >= dateDebut) ? dateFin : dateDebut;
+    const exclus = new Set(Array.isArray(joursExclus) ? joursExclus : []);
+    const m1 = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateDebut);
+    const cur = new Date(Number(m1[1]), Number(m1[2]) - 1, Number(m1[3]));
+    const pad = (n) => ('0' + n).slice(-2);
+    const liste = [];
+    let garde = 0;
+    while (garde < 366) {
+      const iso = cur.getFullYear() + '-' + pad(cur.getMonth() + 1) + '-' + pad(cur.getDate());
+      if (iso > fin) break;
+      if (!exclus.has(iso)) {
+        const borne = (iso === dateDebut || iso === fin);
+        if (inclureWeekEnd || borne || !estWeekEnd(iso)) {
+          liste.push(iso);
+        }
+      }
+      cur.setDate(cur.getDate() + 1);
+      garde++;
     }
-    ((chantier && chantier.taches) || []).forEach(t => {
-      if (t && t.faitLe && /^\d{4}-\d{2}-\d{2}$/.test(t.faitLe)) set.add(t.faitLe);
+    if (!liste.length && !exclus.has(dateDebut)) liste.push(dateDebut);
+    return liste;
+  }
+
+  /** Retourne les dates planifiées du chantier à partir de dateDebut / dateFinPrevue. */
+  function datesPlanifieesChantier(chantier) {
+    const c = chantier || {};
+    if (!estIsoDate(c.dateDebut)) return [];
+    const auj = aujourdhuiLocalISO();
+    let fin = '';
+    if (estIsoDate(c.dateFinPrevue) && c.dateFinPrevue >= c.dateDebut) {
+      fin = c.dateFinPrevue;
+    } else if (c.dateDebut <= auj) {
+      // Chantier déjà démarré sans date de fin renseignée : couvrir de J1 (dateDebut) jusqu'à aujourd'hui
+      fin = auj;
+    } else {
+      // Chantier futur sans date de fin renseignée : J1 = dateDebut
+      fin = c.dateDebut;
+    }
+    return genererDatesPeriode(c.dateDebut, fin, !!c.inclureWeekEnd, c.joursExclus);
+  }
+
+  /** Indique si une journée ne contient aucune saisie ni tâche cochée (coquille vide). */
+  function estJourVide(chantier, dateIso) {
+    if (!chantier || !dateIso) return true;
+    const j = chantier.jours && chantier.jours[dateIso];
+    if (j) {
+      if (valeur(j.synthese) || valeur(j.aleas) || valeur(j.prevuDemain) || valeur(j.envoyeLe)) return false;
+      if (Array.isArray(j.photos) && j.photos.some(p => p && p.dataUrl)) return false;
+      if (j.creeManuellement) return false;
+    }
+    const aTache = ((chantier.taches) || []).some(t => t && t.statut === 'fait' && t.faitLe === dateIso);
+    if (aTache) return false;
+    return true;
+  }
+
+  function datesJoursTriees(chantier, dateIncluse) {
+    const c = chantier || {};
+    const set = new Set();
+    const planifiees = datesPlanifieesChantier(c);
+    const setPlan = new Set(planifiees);
+    const aDatesChantier = planifiees.length > 0;
+    const exclus = new Set(Array.isArray(c.joursExclus) ? c.joursExclus : []);
+
+    planifiees.forEach(d => set.add(d));
+
+    if (c.jours && typeof c.jours === 'object') {
+      Object.keys(c.jours).forEach(d => {
+        if (!estIsoDate(d) || exclus.has(d)) return;
+        // Ignorer les coquilles vides hors période du chantier (ex. date du jour créée par défaut avant configuration)
+        if (aDatesChantier && !setPlan.has(d) && estJourVide(c, d)) return;
+        set.add(d);
+      });
+    }
+
+    ((c.taches) || []).forEach(t => {
+      if (t && t.statut === 'fait' && estIsoDate(t.faitLe)) set.add(t.faitLe);
     });
-    if (dateIncluse && /^\d{4}-\d{2}-\d{2}$/.test(dateIncluse)) set.add(dateIncluse);
+
+    if (estIsoDate(dateIncluse) && !exclus.has(dateIncluse)) {
+      if (!aDatesChantier || setPlan.has(dateIncluse) || !estJourVide(c, dateIncluse)) {
+        set.add(dateIncluse);
+      }
+    }
+
+    if (!set.size) {
+      const def = (estIsoDate(c.dateDebut) && c.dateDebut) || (estIsoDate(dateIncluse) && dateIncluse) || aujourdhuiLocalISO();
+      set.add(def);
+    }
     return Array.from(set).sort();
   }
 
   function calculerBilan(chantier, dateJour) {
     const c = chantier || {};
-    const d = dateJour || c.jourActif || new Date().toISOString().slice(0, 10);
+    const dates = datesJoursTriees(c, dateJour);
+    let d = dateJour || c.jourActif || dates[0] || aujourdhuiLocalISO();
+    if (dates.indexOf(d) < 0) {
+      const auj = aujourdhuiLocalISO();
+      d = dates.indexOf(auj) >= 0 ? auj : dates[0];
+    }
     const phases = Array.isArray(c.phases) && c.phases.length
       ? c.phases
       : [{ id: 'defaut', nom: 'Tâches du chantier' }];
@@ -213,7 +317,6 @@
       });
     }
 
-    const dates = datesJoursTriees(c, d);
     const numeroJour = Math.max(1, dates.indexOf(d) + 1);
     const jour = Object.assign({
       date: d,
@@ -327,7 +430,7 @@
       p.text(titreDoc, this.W / 2, p.y + taille, { size: taille, font: 'F2', color: CYAN, align: 'center', bold: true });
       p.y += taille + 6;
 
-      const sousTitreDate = 'Jour ' + b.numeroJour + ' — ' + frDate(b.dateJour);
+      const sousTitreDate = 'Jour ' + b.numeroJour + (b.nbJoursTotal > 1 ? ' / ' + b.nbJoursTotal : '') + ' — ' + frDate(b.dateJour);
       p.text(sousTitreDate, this.W / 2, p.y + 14, { size: 14.5, font: 'F2', color: CYAN, align: 'center', bold: true });
       p.y += 22;
 
@@ -1071,6 +1174,10 @@
     jourSemaineFr: jourSemaineFr,
     nomComplet: nomComplet,
     toJpeg: toJpeg,
+    estWeekEnd: estWeekEnd,
+    genererDatesPeriode: genererDatesPeriode,
+    datesPlanifieesChantier: datesPlanifieesChantier,
+    estJourVide: estJourVide,
     datesJoursTriees: datesJoursTriees,
     calculerBilan: calculerBilan,
     genererPDF: function (chantier, reglages, dateJour) {

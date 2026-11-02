@@ -6087,21 +6087,125 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
   }
 
   /* ===================== Calcul du bilan chantier & jour ============== */
-  function datesJoursTriees(chantier, dateIncluse) {
-    const set = new Set();
-    if (chantier && chantier.jours && typeof chantier.jours === 'object') {
-      Object.keys(chantier.jours).forEach(d => { if (/^\d{4}-\d{2}-\d{2}$/.test(d)) set.add(d); });
+  function estIsoDate(s) {
+    return /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''));
+  }
+
+  function aujourdhuiLocalISO() {
+    const d = new Date();
+    const pad = (n) => ('0' + n).slice(-2);
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  }
+
+  function estWeekEnd(iso) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ''));
+    if (!m) return false;
+    const wd = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).getDay();
+    return wd === 0 || wd === 6;
+  }
+
+  /** Génère la liste triée des journées planifiées entre dateDebut (J1) et dateFin. */
+  function genererDatesPeriode(dateDebut, dateFin, inclureWeekEnd, joursExclus) {
+    if (!estIsoDate(dateDebut)) return [];
+    const fin = (estIsoDate(dateFin) && dateFin >= dateDebut) ? dateFin : dateDebut;
+    const exclus = new Set(Array.isArray(joursExclus) ? joursExclus : []);
+    const m1 = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateDebut);
+    const cur = new Date(Number(m1[1]), Number(m1[2]) - 1, Number(m1[3]));
+    const pad = (n) => ('0' + n).slice(-2);
+    const liste = [];
+    let garde = 0;
+    while (garde < 366) {
+      const iso = cur.getFullYear() + '-' + pad(cur.getMonth() + 1) + '-' + pad(cur.getDate());
+      if (iso > fin) break;
+      if (!exclus.has(iso)) {
+        const borne = (iso === dateDebut || iso === fin);
+        if (inclureWeekEnd || borne || !estWeekEnd(iso)) {
+          liste.push(iso);
+        }
+      }
+      cur.setDate(cur.getDate() + 1);
+      garde++;
     }
-    ((chantier && chantier.taches) || []).forEach(t => {
-      if (t && t.faitLe && /^\d{4}-\d{2}-\d{2}$/.test(t.faitLe)) set.add(t.faitLe);
+    if (!liste.length && !exclus.has(dateDebut)) liste.push(dateDebut);
+    return liste;
+  }
+
+  /** Retourne les dates planifiées du chantier à partir de dateDebut / dateFinPrevue. */
+  function datesPlanifieesChantier(chantier) {
+    const c = chantier || {};
+    if (!estIsoDate(c.dateDebut)) return [];
+    const auj = aujourdhuiLocalISO();
+    let fin = '';
+    if (estIsoDate(c.dateFinPrevue) && c.dateFinPrevue >= c.dateDebut) {
+      fin = c.dateFinPrevue;
+    } else if (c.dateDebut <= auj) {
+      // Chantier déjà démarré sans date de fin renseignée : couvrir de J1 (dateDebut) jusqu'à aujourd'hui
+      fin = auj;
+    } else {
+      // Chantier futur sans date de fin renseignée : J1 = dateDebut
+      fin = c.dateDebut;
+    }
+    return genererDatesPeriode(c.dateDebut, fin, !!c.inclureWeekEnd, c.joursExclus);
+  }
+
+  /** Indique si une journée ne contient aucune saisie ni tâche cochée (coquille vide). */
+  function estJourVide(chantier, dateIso) {
+    if (!chantier || !dateIso) return true;
+    const j = chantier.jours && chantier.jours[dateIso];
+    if (j) {
+      if (valeur(j.synthese) || valeur(j.aleas) || valeur(j.prevuDemain) || valeur(j.envoyeLe)) return false;
+      if (Array.isArray(j.photos) && j.photos.some(p => p && p.dataUrl)) return false;
+      if (j.creeManuellement) return false;
+    }
+    const aTache = ((chantier.taches) || []).some(t => t && t.statut === 'fait' && t.faitLe === dateIso);
+    if (aTache) return false;
+    return true;
+  }
+
+  function datesJoursTriees(chantier, dateIncluse) {
+    const c = chantier || {};
+    const set = new Set();
+    const planifiees = datesPlanifieesChantier(c);
+    const setPlan = new Set(planifiees);
+    const aDatesChantier = planifiees.length > 0;
+    const exclus = new Set(Array.isArray(c.joursExclus) ? c.joursExclus : []);
+
+    planifiees.forEach(d => set.add(d));
+
+    if (c.jours && typeof c.jours === 'object') {
+      Object.keys(c.jours).forEach(d => {
+        if (!estIsoDate(d) || exclus.has(d)) return;
+        // Ignorer les coquilles vides hors période du chantier (ex. date du jour créée par défaut avant configuration)
+        if (aDatesChantier && !setPlan.has(d) && estJourVide(c, d)) return;
+        set.add(d);
+      });
+    }
+
+    ((c.taches) || []).forEach(t => {
+      if (t && t.statut === 'fait' && estIsoDate(t.faitLe)) set.add(t.faitLe);
     });
-    if (dateIncluse && /^\d{4}-\d{2}-\d{2}$/.test(dateIncluse)) set.add(dateIncluse);
+
+    if (estIsoDate(dateIncluse) && !exclus.has(dateIncluse)) {
+      if (!aDatesChantier || setPlan.has(dateIncluse) || !estJourVide(c, dateIncluse)) {
+        set.add(dateIncluse);
+      }
+    }
+
+    if (!set.size) {
+      const def = (estIsoDate(c.dateDebut) && c.dateDebut) || (estIsoDate(dateIncluse) && dateIncluse) || aujourdhuiLocalISO();
+      set.add(def);
+    }
     return Array.from(set).sort();
   }
 
   function calculerBilan(chantier, dateJour) {
     const c = chantier || {};
-    const d = dateJour || c.jourActif || new Date().toISOString().slice(0, 10);
+    const dates = datesJoursTriees(c, dateJour);
+    let d = dateJour || c.jourActif || dates[0] || aujourdhuiLocalISO();
+    if (dates.indexOf(d) < 0) {
+      const auj = aujourdhuiLocalISO();
+      d = dates.indexOf(auj) >= 0 ? auj : dates[0];
+    }
     const phases = Array.isArray(c.phases) && c.phases.length
       ? c.phases
       : [{ id: 'defaut', nom: 'Tâches du chantier' }];
@@ -6162,7 +6266,6 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       });
     }
 
-    const dates = datesJoursTriees(c, d);
     const numeroJour = Math.max(1, dates.indexOf(d) + 1);
     const jour = Object.assign({
       date: d,
@@ -6276,7 +6379,7 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       p.text(titreDoc, this.W / 2, p.y + taille, { size: taille, font: 'F2', color: CYAN, align: 'center', bold: true });
       p.y += taille + 6;
 
-      const sousTitreDate = 'Jour ' + b.numeroJour + ' — ' + frDate(b.dateJour);
+      const sousTitreDate = 'Jour ' + b.numeroJour + (b.nbJoursTotal > 1 ? ' / ' + b.nbJoursTotal : '') + ' — ' + frDate(b.dateJour);
       p.text(sousTitreDate, this.W / 2, p.y + 14, { size: 14.5, font: 'F2', color: CYAN, align: 'center', bold: true });
       p.y += 22;
 
@@ -7020,6 +7123,10 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
     jourSemaineFr: jourSemaineFr,
     nomComplet: nomComplet,
     toJpeg: toJpeg,
+    estWeekEnd: estWeekEnd,
+    genererDatesPeriode: genererDatesPeriode,
+    datesPlanifieesChantier: datesPlanifieesChantier,
+    estJourVide: estJourVide,
     datesJoursTriees: datesJoursTriees,
     calculerBilan: calculerBilan,
     genererPDF: function (chantier, reglages, dateJour) {
@@ -7179,8 +7286,8 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       overlay.addEventListener('click', (ev) => {
         const b = ev.target.closest('[data-a]');
         if (ev.target === overlay || (b && b.dataset.a === 'fermer')) {
+          if (surFermeture) surFermeture(panneau);
           overlay.remove();
-          if (surFermeture) surFermeture();
           rendreTout();
         }
       });
@@ -7414,17 +7521,6 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
     const auj = aujourdhuiISO();
     const modele = ImportTaches.depuisModele(opts.modeleId || 'vierge');
     const dests = ((S && S.mail && S.mail.destinatairesDefaut) || []).map(d => Object.assign({}, d, { id: uid('dst'), actif: true }));
-    const J = {};
-    J[auj] = {
-      date: auj,
-      horaires: '08h00 - 17h30',
-      equipeJour: Report.nomComplet(S && S.technicien) || '',
-      synthese: '',
-      aleas: '',
-      prevuDemain: '',
-      photos: [],
-      envoyeLe: ''
-    };
     return {
       id: uid('ch'),
       estDemo: !!opts.estDemo,
@@ -7433,6 +7529,8 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       equipement: opts.equipement || '',
       dateDebut: auj,
       dateFinPrevue: '',
+      inclureWeekEnd: false,
+      joursExclus: [],
       responsable: Report.nomComplet(S && S.technicien) || '',
       equipe: '',
       client: {
@@ -7449,7 +7547,7 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       phases: modele.phases,
       taches: modele.taches,
       jourActif: auj,
-      jours: J,
+      jours: {},
       phasesPliees: {},
       maj: new Date().toISOString()
     };
@@ -7530,10 +7628,14 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
   let timerSauvegarde = null;
   let dicteeActive = null;
 
-  function assurerJour(dateIso) {
-    const d = dateIso || C.jourActif || aujourdhuiISO();
+  function assurerJour(dateIso, opts) {
+    opts = opts || {};
+    const d = dateIso || C.jourActif || C.dateDebut || aujourdhuiISO();
     C.jourActif = d;
     C.jours = C.jours || {};
+    if (opts.creeManuellement && Array.isArray(C.joursExclus)) {
+      C.joursExclus = C.joursExclus.filter(x => x !== d);
+    }
     if (!C.jours[d]) {
       C.jours[d] = {
         date: d,
@@ -7543,10 +7645,103 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
         aleas: '',
         prevuDemain: '',
         photos: [],
-        envoyeLe: ''
+        envoyeLe: '',
+        creeManuellement: !!opts.creeManuellement
       };
+    } else if (opts.creeManuellement) {
+      C.jours[d].creeManuellement = true;
     }
     return C.jours[d];
+  }
+
+  /** Vérifie si un jour n'a strictement aucune note, photo, envoi ou tâche pointée. */
+  function estJourSansDonnees(c, dateIso) {
+    if (!c || !dateIso) return true;
+    const j = c.jours && c.jours[dateIso];
+    if (j) {
+      if ((j.synthese && j.synthese.trim()) || (j.aleas && j.aleas.trim()) || (j.prevuDemain && j.prevuDemain.trim()) || (j.envoyeLe && j.envoyeLe.trim())) return false;
+      if (Array.isArray(j.photos) && j.photos.some(p => p && p.dataUrl)) return false;
+    }
+    if ((c.taches || []).some(t => t && t.statut === 'fait' && t.faitLe === dateIso)) return false;
+    return true;
+  }
+
+  /** Rattache au Jour 1 (nouvDebut) toutes les tâches ou notes antérieures à nouvDebut. */
+  function recalerAvantDebutSurJ1(c, nouvDebut) {
+    if (!c || !nouvDebut) return;
+    c.jours = c.jours || {};
+    (c.taches || []).forEach(t => {
+      if (t && t.statut === 'fait' && t.faitLe && t.faitLe < nouvDebut) {
+        t.faitLe = nouvDebut;
+      }
+    });
+    const jCible = c.jours[nouvDebut] || {
+      date: nouvDebut,
+      horaires: '08h00 - 17h30',
+      equipeJour: c.equipe || Report.nomComplet(S.technicien) || '',
+      synthese: '',
+      aleas: '',
+      prevuDemain: '',
+      photos: [],
+      envoyeLe: ''
+    };
+    Object.keys(c.jours).sort().forEach(d => {
+      if (d >= nouvDebut) return;
+      const src = c.jours[d];
+      if (src) {
+        if (src.synthese && src.synthese.trim()) jCible.synthese = [jCible.synthese, src.synthese.trim()].filter(Boolean).join('\n');
+        if (src.aleas && src.aleas.trim()) jCible.aleas = [jCible.aleas, src.aleas.trim()].filter(Boolean).join('\n');
+        if (src.prevuDemain && src.prevuDemain.trim() && !jCible.prevuDemain) jCible.prevuDemain = src.prevuDemain.trim();
+        if (Array.isArray(src.photos) && src.photos.length) jCible.photos = (jCible.photos || []).concat(src.photos);
+      }
+      delete c.jours[d];
+    });
+    if (!estJourSansDonnees(c, nouvDebut)) {
+      c.jours[nouvDebut] = jCible;
+    }
+  }
+
+  /** Aligne les journées du chantier et le jour actif sur dateDebut / dateFinPrevue. */
+  function synchroniserDatesChantier(c, opts) {
+    if (!c) return;
+    opts = opts || {};
+    c.jours = c.jours || {};
+
+    // Si début ou fin tombe un samedi/dimanche, activer automatiquement l'inclusion des week-ends
+    if ((c.dateDebut && Report.estWeekEnd(c.dateDebut)) || (c.dateFinPrevue && Report.estWeekEnd(c.dateFinPrevue))) {
+      if (c.inclureWeekEnd === undefined) c.inclureWeekEnd = true;
+    }
+
+    const planifiees = Report.datesPlanifieesChantier(c);
+    const setPlan = new Set(planifiees);
+
+    // Purger les journées vides hors période (ex. date d'aujourd'hui créée avant saisie des vraies dates)
+    if (planifiees.length > 0) {
+      Object.keys(c.jours).forEach(d => {
+        if (!setPlan.has(d)) {
+          const vide = opts.depuisFormulaire ? estJourSansDonnees(c, d) : Report.estJourVide(c, d);
+          if (vide) delete c.jours[d];
+        }
+      });
+    }
+
+    const dates = Report.datesJoursTriees(c);
+    const auj = aujourdhuiISO();
+
+    if (opts.datesModifiees) {
+      // Après modification des dates du chantier :
+      // - Si aujourd'hui fait partie des journées planifiées du chantier, ouvrir aujourd'hui (Jour X / N)
+      // - Sinon ouvrir directement le Jour 1 (dateDebut)
+      if (setPlan.has(auj)) {
+        c.jourActif = auj;
+      } else {
+        c.jourActif = planifiees[0] || dates[0] || c.dateDebut || auj;
+      }
+    } else if (!c.jourActif || dates.indexOf(c.jourActif) < 0) {
+      c.jourActif = dates.indexOf(auj) >= 0 ? auj : (dates[0] || c.dateDebut || auj);
+    }
+
+    assurerJour(c.jourActif);
   }
 
   function planifierSauvegarde() {
@@ -7701,6 +7896,17 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
           <button type="button" class="btn sm ghost" data-a="garder-demo">Masquer ce bandeau</button>
         </div>
       </div>`;
+    } else if (C.dateDebut && bilan.datesJours.length && bilan.datesJours[0] < C.dateDebut) {
+      html += `<div class="sticky-note" style="margin-bottom:12px;background:var(--bfr-primary-light);border-color:var(--bfr-primary-border);color:var(--bfr-secondary);display:flex;flex-direction:column;gap:8px">
+        <div>
+          <strong>📅 Recaler le Jour 1 sur la date de début du chantier ?</strong><br>
+          <span style="font-size:12.5px;color:#334155">Des saisies datées du <strong>${esc(Report.frDate(bilan.datesJours[0]))}</strong> précèdent le début du chantier configuré au <strong>${esc(Report.frDate(C.dateDebut))}</strong>.</span>
+        </div>
+        <div class="btnrow">
+          <button type="button" class="btn sm principal" data-a="recaler-j1">${ICO.calendar(15)} Fixer J1 au ${esc(Report.frDate(C.dateDebut))}</button>
+          <button type="button" class="btn sm ghost" data-a="editer-chantier">Modifier les dates</button>
+        </div>
+      </div>`;
     }
 
     if (bilan.bloques.length > 0 && filtreStatut !== 'bloque') {
@@ -7716,17 +7922,25 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
     el.innerHTML = html;
   }
 
-  function rendreEntete() {
+  function rendreEntete(bilan) {
     const el = $('#zoneEntete');
     if (!el) return;
     const cli = C.client || {};
     const destActifs = (C.destinataires || []).filter(d => d && d.actif !== false && d.email);
-    const estConfigure = !!(C.nom || cli.nom);
+    const estConfigure = !!(C.nom || cli.nom || C.dateFinPrevue);
+
+    let txtDates = '';
+    if (C.dateDebut && C.dateFinPrevue) {
+      txtDates = `Du <strong>${esc(Report.frDate(C.dateDebut))}</strong> (J1) au <strong>${esc(Report.frDate(C.dateFinPrevue))}</strong> · ${bilan.nbJoursTotal} journée${bilan.nbJoursTotal > 1 ? 's' : ''}`;
+    } else if (C.dateDebut) {
+      txtDates = `Début (J1) : <strong>${esc(Report.frDate(C.dateDebut))}</strong> · ${bilan.nbJoursTotal} journée${bilan.nbJoursTotal > 1 ? 's' : ''}`;
+    }
 
     if (!estConfigure) {
       el.innerHTML = `<div class="card">
         <h2>${ICO.building(19, 'ico-cyan')} Fiche du chantier</h2>
-        <p class="hint">Renseignez les informations du chantier, le client et les personnes qui recevront le rapport quotidien par e-mail.</p>
+        <p class="hint">Renseignez les dates du chantier (J1 → fin), le client et les personnes qui recevront le rapport quotidien par e-mail.</p>
+        ${txtDates ? `<div style="font-size:12.5px;color:var(--bfr-secondary);margin-bottom:10px">📅 ${txtDates}</div>` : ''}
         <div class="btnrow">
           <button type="button" class="btn principal" data-a="editer-chantier">${ICO.pen(16)} Configurer le chantier</button>
           <button type="button" class="btn ghost" data-a="ouvrir-import">${ICO.upload(16)} Importer une liste</button>
@@ -7742,16 +7956,17 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
         </span>
         ${C.affaire ? `<span class="pill">${esc(C.affaire)}</span>` : ''}
       </h2>
-      <div class="recap" style="margin-bottom:10px;font-size:13.5px;color:var(--bfr-text);line-height:1.5">
+      <div class="recap" style="margin-bottom:10px;font-size:13.5px;color:var(--bfr-text);line-height:1.55">
         ${cli.nom ? `<div><strong style="color:var(--bfr-secondary)">${esc(cli.nom)}</strong>${cli.lieu ? ' — ' + esc(cli.lieu) : ''}</div>` : ''}
         ${C.equipement ? `<div style="color:var(--bfr-text-muted);font-size:12.5px">⚙️ ${esc(C.equipement)}</div>` : ''}
-        <div style="color:var(--bfr-text-muted);font-size:12.5px;margin-top:3px">
+        ${txtDates ? `<div style="color:var(--bfr-text-muted);font-size:12.5px;margin-top:2px">📅 ${txtDates}</div>` : ''}
+        <div style="color:var(--bfr-text-muted);font-size:12.5px;margin-top:2px">
           📧 Destinataires rapport : <strong style="color:var(--bfr-secondary)">${destActifs.length ? destActifs.length + ' personne' + (destActifs.length > 1 ? 's' : '') : 'aucun e-mail configuré'}</strong>
           ${cli.contact ? ` · Contact site : ${esc(cli.contact)}` : ''}
         </div>
       </div>
       <div class="btnrow">
-        <button type="button" class="btn sm ghost" data-a="editer-chantier">${ICO.pen(14)} Chantier & Client</button>
+        <button type="button" class="btn sm ghost" data-a="editer-chantier">${ICO.pen(14)} Chantier & Dates</button>
         <button type="button" class="btn sm ghost" data-a="editer-destinataires">${ICO.mail(15)} Destinataires (${destActifs.length})</button>
       </div>
     </div>`;
@@ -8076,12 +8291,12 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
 
   function rendreTout() {
     if (!C) return;
-    assurerJour(C.jourActif);
+    synchroniserDatesChantier(C);
     const bilan = Report.calculerBilan(C, C.jourActif);
     rendreTopbar(bilan);
     rendrePilotage(bilan);
     rendreBanniere(bilan);
-    rendreEntete();
+    rendreEntete(bilan);
     rendreTaches(bilan);
     rendreJournal(bilan);
     rendreCloture(bilan);
@@ -8602,13 +8817,22 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
   /* ===================== Fiche Chantier & Client ====================== */
   function feuilleChantier() {
     const cli = C.client || {};
+    const ancienDebut = C.dateDebut || '';
+    const ancienneFin = C.dateFinPrevue || '';
+    const ancienWE = !!C.inclureWeekEnd;
+    const etaitDemo = !!C.estDemo;
+    let dejaFinalise = false;
+
     const html = `<div class="panel">
       <div class="grab"></div>
-      <h3>Informations du chantier</h3>
-      <p class="sub">Ces données figurent dans l'en-tête de chaque rapport quotidien BFR Systems.</p>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px">
+        <h3 style="margin:0">Informations &amp; Dates du chantier</h3>
+        <button type="button" class="btn sm principal" data-valider-chantier="1">${ICO.check(15)} Enregistrer</button>
+      </div>
+      <p class="sub">Le <strong>Jour 1 (J1)</strong> correspond à la date de début du chantier. Toutes les journées jusqu'à la fin prévisionnelle sont générées automatiquement.</p>
 
       <div class="card">
-        <h2>Projet / Chantier BFR</h2>
+        <h2>Projet &amp; Calendrier du chantier</h2>
         <div class="field"><label>Intitulé du chantier / Projet *</label>
           <input type="text" data-ck="nom" value="${esc(C.nom || '')}" placeholder="Ex. Installation ligne d'encaissage robotisée"></div>
         <div class="grid2">
@@ -8618,11 +8842,22 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
             <input type="text" data-ck="equipement" value="${esc(C.equipement || '')}" placeholder="Ex. Ligne 3 - Encaisseuse"></div>
         </div>
         <div class="grid2">
-          <div class="field"><label>Début du chantier</label>
-            <input type="date" data-ck="dateDebut" value="${esc(C.dateDebut || '')}"></div>
+          <div class="field"><label>Début du chantier (Jour 1) *</label>
+            <input type="date" id="inpChDateDebut" data-ck="dateDebut" value="${esc(C.dateDebut || '')}"></div>
           <div class="field"><label>Fin prévisionnelle</label>
-            <input type="date" data-ck="dateFinPrevue" value="${esc(C.dateFinPrevue || '')}"></div>
+            <input type="date" id="inpChDateFin" data-ck="dateFinPrevue" value="${esc(C.dateFinPrevue || '')}"></div>
         </div>
+
+        <div class="field" style="margin-top:2px">
+          <label>Jours travaillés sur le chantier</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <button type="button" class="btn sm ${!C.inclureWeekEnd ? 'principal' : 'grey'}" data-we="0" style="min-height:36px">Lun. → Ven. (ouvrés)</button>
+            <button type="button" class="btn sm ${C.inclureWeekEnd ? 'principal' : 'grey'}" data-we="1" style="min-height:36px">7j/7 (week-end inclus)</button>
+          </div>
+        </div>
+
+        <div id="apercuPlanningDates" class="sticky-note" style="margin-bottom:10px;background:var(--bfr-primary-light);border-color:var(--bfr-primary-border);color:var(--bfr-secondary);font-size:12.5px"></div>
+
         <div class="grid2">
           <div class="field"><label>Responsable chantier BFR</label>
             <input type="text" data-ck="responsable" value="${esc(C.responsable || Report.nomComplet(S.technicien) || '')}" placeholder="Prénom NOM"></div>
@@ -8632,7 +8867,7 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       </div>
 
       <div class="card">
-        <h2>Client & Lieu d'intervention</h2>
+        <h2>Client &amp; Lieu d'intervention</h2>
         <div class="field"><label>Nom du client *</label>
           <input type="text" data-clik="nom" value="${esc(cli.nom || '')}" placeholder="Ex. Laiterie du Val d'Ain"></div>
         <div class="field"><label>Site / Atelier / Ville</label>
@@ -8662,16 +8897,145 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
         </div>
       </div>
 
-      <button type="button" class="btn principal wide" data-valider-chantier="1">${ICO.check(18)} Enregistrer</button>
+      <button type="button" class="btn principal wide" data-valider-chantier="1">${ICO.check(18)} Enregistrer le chantier</button>
     </div>`;
 
+    function lireFormulaireDansChantier(panneau) {
+      $$('[data-ck]', panneau).forEach(inp => { C[inp.dataset.ck] = inp.value.trim(); });
+      C.client = C.client || {};
+      $$('[data-clik]', panneau).forEach(inp => { C.client[inp.dataset.clik] = inp.value.trim(); });
+    }
+
+    function rafraichirApercuPlanning(panneau) {
+      const box = $('#apercuPlanningDates', panneau);
+      if (!box) return;
+      const deb = ($('#inpChDateDebut', panneau).value || '').trim();
+      const fin = ($('#inpChDateFin', panneau).value || '').trim();
+      if (!deb) {
+        box.style.background = '#f8fafc';
+        box.style.borderColor = 'var(--bfr-border)';
+        box.innerHTML = 'Indiquez la <strong>date de début</strong> pour définir le Jour 1 du chantier.';
+        return;
+      }
+      if (fin && fin < deb) {
+        box.style.background = 'var(--def-bg)';
+        box.style.borderColor = 'var(--def-border)';
+        box.innerHTML = `<strong style="color:#991b1b">⚠️ La fin prévisionnelle (${esc(Report.frDate(fin))}) est antérieure au début (${esc(Report.frDate(deb))}).</strong>`;
+        return;
+      }
+      box.style.background = 'var(--bfr-primary-light)';
+      box.style.borderColor = 'var(--bfr-primary-border)';
+      const apercuDates = Report.datesPlanifieesChantier({
+        dateDebut: deb,
+        dateFinPrevue: fin,
+        inclureWeekEnd: !!C.inclureWeekEnd,
+        joursExclus: []
+      });
+      if (fin) {
+        const dern = apercuDates[apercuDates.length - 1] || fin;
+        box.innerHTML = `📅 <strong>${apercuDates.length} journée${apercuDates.length > 1 ? 's' : ''} planifiée${apercuDates.length > 1 ? 's' : ''}</strong> : <strong>J1</strong> le ${esc(Report.jourSemaineFr(deb))} ${esc(Report.frDate(deb))} → <strong>J${apercuDates.length}</strong> le ${esc(Report.jourSemaineFr(dern))} ${esc(Report.frDate(dern))}`;
+      } else {
+        box.innerHTML = `📅 <strong>Jour 1 fixé au ${esc(Report.jourSemaineFr(deb))} ${esc(Report.frDate(deb))}</strong>` +
+          (apercuDates.length > 1 ? ` (${apercuDates.length} jours jusqu'à aujourd'hui)` : ` — renseignez la fin prévisionnelle pour pré-créer toutes les journées.`);
+      }
+    }
+
+    async function appliquerEtFermer(panneau, overlay, avecDialogue) {
+      if (dejaFinalise) return;
+      lireFormulaireDansChantier(panneau);
+
+      if (C.dateDebut && C.dateFinPrevue && C.dateFinPrevue < C.dateDebut) {
+        if (avecDialogue) {
+          toast('⚠️ La date de fin doit être postérieure ou égale au début');
+          const elFin = $('#inpChDateFin', panneau);
+          if (elFin) elFin.focus();
+          return;
+        }
+        // Si fermeture par clic extérieur avec dates inversées, inverser proprement
+        const tmp = C.dateDebut;
+        C.dateDebut = C.dateFinPrevue;
+        C.dateFinPrevue = tmp;
+      }
+
+      dejaFinalise = true;
+      const datesModifiees = (C.dateDebut !== ancienDebut) || (C.dateFinPrevue !== ancienneFin) || (!!C.inclureWeekEnd !== ancienWE);
+
+      if (datesModifiees) {
+        // Nettoyer les exclusions obsolètes hors de la nouvelle plage
+        C.joursExclus = (C.joursExclus || []).filter(d => (!C.dateDebut || d >= C.dateDebut) && (!C.dateFinPrevue || d <= C.dateFinPrevue));
+
+        // Si on modifie les dates d'un chantier encore en mode démo, purger les faux journaux démo hors période
+        if (etaitDemo && C.dateDebut) {
+          recalerAvantDebutSurJ1(C, C.dateDebut);
+        } else if (avecDialogue && C.dateDebut) {
+          const datesExistantes = Report.datesJoursTriees(C);
+          if (datesExistantes.length && datesExistantes[0] < C.dateDebut) {
+            const ok = await Dialogue.confirmer(
+              `Des notes ou tâches cochées existent au ${Report.frDate(datesExistantes[0])}, avant le début du chantier (${Report.frDate(C.dateDebut)}). Voulez-vous les rattacher au Jour 1 (${Report.frDate(C.dateDebut)}) ?`,
+              { ok: 'Oui, fixer J1 au ' + Report.frDate(C.dateDebut), annuler: 'Conserver' }
+            );
+            if (ok) recalerAvantDebutSurJ1(C, C.dateDebut);
+          }
+        }
+      }
+
+      if (C.client.email && !(C.destinataires || []).some(d => d.email.toLowerCase() === C.client.email.toLowerCase())) {
+        C.destinataires = C.destinataires || [];
+        C.destinataires.unshift({
+          id: uid('dst'),
+          nom: C.client.contact || C.client.nom || 'Client',
+          role: C.client.fonction || 'Client',
+          email: C.client.email,
+          type: 'to',
+          actif: true
+        });
+      }
+
+      if (C.nom || (C.client && C.client.nom) || datesModifiees) {
+        C.estDemo = false;
+      }
+
+      synchroniserDatesChantier(C, { depuisFormulaire: true, datesModifiees: datesModifiees });
+      planifierSauvegarde();
+      if (overlay && overlay.parentNode) overlay.remove();
+      rendreTout();
+      if (avecDialogue) {
+        const b = Report.calculerBilan(C, C.jourActif);
+        toast('✓ Chantier enregistré — J1 : ' + Report.frDate(b.datesJours[0]) + ' (' + b.nbJoursTotal + ' j.)');
+      }
+    }
+
     Ouvrir.ouvrir(html, (panneau, overlay) => {
+      rafraichirApercuPlanning(panneau);
+
+      // Sauvegarde en fil de l'eau et mise à jour de l'aperçu des dates
+      $$('[data-ck], [data-clik]', panneau).forEach(inp => {
+        const maj = () => {
+          lireFormulaireDansChantier(panneau);
+          if (inp.id === 'inpChDateDebut' || inp.id === 'inpChDateFin') {
+            if ((C.dateDebut && Report.estWeekEnd(C.dateDebut)) || (C.dateFinPrevue && Report.estWeekEnd(C.dateFinPrevue))) {
+              C.inclureWeekEnd = true;
+              $$('[data-we]', panneau).forEach(b => {
+                const on = (b.dataset.we === '1') === !!C.inclureWeekEnd;
+                b.className = 'btn sm ' + (on ? 'principal' : 'grey');
+              });
+            }
+            rafraichirApercuPlanning(panneau);
+          }
+          planifierSauvegarde();
+        };
+        inp.addEventListener('input', maj);
+        inp.addEventListener('change', maj);
+      });
+
       const inpLogo = $('#inpLogoClient', panneau);
       if (inpLogo) {
         inpLogo.addEventListener('change', async () => {
+          lireFormulaireDansChantier(panneau);
           const f = inpLogo.files && inpLogo.files[0];
           if (!f) return;
           C.client.logo = await compresserImage(f, 500, 0.88);
+          dejaFinalise = true;
           planifierSauvegarde();
           overlay.remove();
           feuilleChantier();
@@ -8680,7 +9044,9 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       const btnSupLogo = $('#btnSupprLogoCli', panneau);
       if (btnSupLogo) {
         btnSupLogo.addEventListener('click', () => {
+          lireFormulaireDansChantier(panneau);
           C.client.logo = '';
+          dejaFinalise = true;
           planifierSauvegarde();
           overlay.remove();
           feuilleChantier();
@@ -8688,28 +9054,23 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       }
 
       panneau.addEventListener('click', (e) => {
-        if (!e.target.closest('[data-valider-chantier]')) return;
-        $$('[data-ck]', panneau).forEach(inp => { C[inp.dataset.ck] = inp.value.trim(); });
-        C.client = C.client || {};
-        $$('[data-clik]', panneau).forEach(inp => { C.client[inp.dataset.clik] = inp.value.trim(); });
-        // Si le client a un e-mail et n'est pas encore dans les destinataires, le proposer automatiquement
-        if (C.client.email && !(C.destinataires || []).some(d => d.email.toLowerCase() === C.client.email.toLowerCase())) {
-          C.destinataires = C.destinataires || [];
-          C.destinataires.unshift({
-            id: uid('dst'),
-            nom: C.client.contact || C.client.nom || 'Client',
-            role: C.client.fonction || 'Client',
-            email: C.client.email,
-            type: 'to',
-            actif: true
+        const bWe = e.target.closest('[data-we]');
+        if (bWe) {
+          C.inclureWeekEnd = bWe.dataset.we === '1';
+          $$('[data-we]', panneau).forEach(b => {
+            const on = (b.dataset.we === '1') === !!C.inclureWeekEnd;
+            b.className = 'btn sm ' + (on ? 'principal' : 'grey');
           });
+          rafraichirApercuPlanning(panneau);
+          planifierSauvegarde();
+          return;
         }
-        C.estDemo = false;
-        planifierSauvegarde();
-        overlay.remove();
-        rendreTout();
-        toast('Informations du chantier enregistrées');
+        if (e.target.closest('[data-valider-chantier]')) {
+          appliquerEtFermer(panneau, overlay, true);
+        }
       });
+    }, (panneau) => {
+      if (panneau) appliquerEtFermer(panneau, null, false);
     });
   }
 
@@ -8821,42 +9182,78 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
   }
 
   /* ===================== Gestion Multi-Jours ========================== */
+  function prochainJourApres(dateIso, inclureWE) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateIso || ''));
+    const d = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date();
+    const pad = (n) => ('0' + n).slice(-2);
+    do {
+      d.setDate(d.getDate() + 1);
+    } while (!inclureWE && (d.getDay() === 0 || d.getDay() === 6));
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  }
+
   function feuilleJours() {
-    const dates = Report.datesJoursTriees(C, C.jourActif);
-    const auj = aujourdhuiISO();
+    function dessiner(panneau) {
+      const dates = Report.datesJoursTriees(C);
+      const auj = aujourdhuiISO();
+      const dern = dates[dates.length - 1] || C.dateDebut || auj;
+      const dateProposee = prochainJourApres(dern, !!C.inclureWeekEnd);
 
-    const html = `<div class="panel">
-      <div class="grab"></div>
-      <h3>Journées d'intervention du chantier</h3>
-      <p class="sub">Naviguez d'un jour à l'autre pour consulter l'historique ou éditer le rapport d'une journée précise.</p>
-
-      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">
-        ${dates.map((d, idx) => {
-          const b = Report.calculerBilan(C, d);
-          const actif = d === C.jourActif;
-          return `<button type="button" class="menu-item" data-choisir-jour="${esc(d)}" style="margin:0;${actif ? 'border-color:var(--bfr-primary);background:var(--bfr-primary-light)' : ''}">
-            <span class="ico" style="${actif ? 'background:var(--bfr-primary);color:#fff' : ''}">J${idx + 1}</span>
-            <span style="flex:1">
-              <strong>Jour ${idx + 1} — ${esc(Report.jourSemaineFr(d))} ${esc(Report.frDate(d))}${d === auj ? ' (Aujourd\'hui)' : ''}</strong>
-              <small>${b.faitCeJour.length} tâche${b.faitCeJour.length > 1 ? 's' : ''} réalisée${b.faitCeJour.length > 1 ? 's' : ''}${b.jour.envoyeLe ? ' · ✓ Rapport envoyé à ' + esc(b.jour.envoyeLe) : ' · Rapport non envoyé'}</small>
-            </span>
-          </button>`;
-        }).join('')}
-      </div>
-
-      <div class="card">
-        <h2>Ouvrir / Ajouter une autre date</h2>
-        <div style="display:flex;gap:8px">
-          <input type="date" id="inpNouvDateJour" value="${esc(auj)}" style="flex:1">
-          <button type="button" class="btn principal sm" data-ouvrir-date="1">${ICO.plus(16)} Ouvrir ce jour</button>
+      panneau.innerHTML = `
+        <div class="grab"></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px">
+          <h3 style="margin:0">Journées du chantier (${dates.length})</h3>
+          <button type="button" class="btn sm ghost" data-jours-dates="1">${ICO.pen(13)} Dates J1→Fin</button>
         </div>
-      </div>
+        <p class="sub">
+          ${C.dateDebut
+            ? `Début <strong>J1 : ${esc(Report.frDate(C.dateDebut))}</strong>${C.dateFinPrevue ? ` → Fin : <strong>${esc(Report.frDate(C.dateFinPrevue))}</strong>` : ''} (${C.inclureWeekEnd ? '7j/7' : 'Lun.–Ven.'})`
+            : `Naviguez d'un jour à l'autre pour consulter ou éditer chaque journée.`}
+        </p>
 
-      <button type="button" class="btn grey wide" data-a="fermer">Fermer</button>
-    </div>`;
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">
+          ${dates.map((d, idx) => {
+            const b = Report.calculerBilan(C, d);
+            const actif = d === C.jourActif;
+            const estVide = estJourSansDonnees(C, d);
+            const sousTxt = b.jour.envoyeLe
+              ? `${b.faitCeJour.length} tâche${b.faitCeJour.length > 1 ? 's' : ''} · ✓ Rapport envoyé à ${esc(b.jour.envoyeLe)}`
+              : (!estVide
+                  ? `${b.faitCeJour.length} tâche${b.faitCeJour.length > 1 ? 's' : ''} pointée${b.faitCeJour.length > 1 ? 's' : ''}${b.jour.synthese ? ' · Journal saisi' : ''}`
+                  : (d > auj ? 'Journée planifiée' : 'Aucune saisie pour l\'instant'));
+            return `<div style="display:flex;align-items:center;gap:6px">
+              <button type="button" class="menu-item" data-choisir-jour="${esc(d)}" style="margin:0;flex:1;${actif ? 'border-color:var(--bfr-primary);background:var(--bfr-primary-light)' : ''}">
+                <span class="ico" style="${actif ? 'background:var(--bfr-primary);color:#fff' : ''}">J${idx + 1}</span>
+                <span style="flex:1;min-width:0">
+                  <strong>Jour ${idx + 1} — ${esc(Report.jourSemaineFr(d))} ${esc(Report.frDate(d))}${d === auj ? ' · Aujourd\'hui' : ''}</strong>
+                  <small>${sousTxt}</small>
+                </span>
+              </button>
+              ${dates.length > 1 ? `<button type="button" class="btn sm ${estVide ? 'grey' : 'danger'}" data-exclure-jour="${esc(d)}" title="Retirer cette journée du planning (ex. jour férié / non travaillé)" style="min-height:42px;padding:0 10px">${ICO.trash(14)}</button>` : ''}
+            </div>`;
+          }).join('')}
+        </div>
 
-    Ouvrir.ouvrir(html, (panneau, overlay) => {
-      panneau.addEventListener('click', (e) => {
+        <div class="card">
+          <h2>Ajouter une journée supplémentaire</h2>
+          <p class="hint" style="margin-top:0">Pour prolonger le chantier d'un jour ou ajouter un samedi / dimanche ponctuel :</p>
+          <div style="display:flex;gap:8px">
+            <input type="date" id="inpNouvDateJour" value="${esc(dateProposee)}" style="flex:1">
+            <button type="button" class="btn principal sm" data-ouvrir-date="1">${ICO.plus(16)} Ajouter</button>
+          </div>
+        </div>
+
+        <button type="button" class="btn grey wide" data-a="fermer">Fermer</button>`;
+    }
+
+    Ouvrir.ouvrir('<div class="panel"></div>', (panneau, overlay) => {
+      dessiner(panneau);
+      panneau.addEventListener('click', async (e) => {
+        if (e.target.closest('[data-jours-dates]')) {
+          overlay.remove();
+          feuilleChantier();
+          return;
+        }
         const bj = e.target.closest('[data-choisir-jour]');
         if (bj) {
           assurerJour(bj.dataset.choisirJour);
@@ -8865,14 +9262,44 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
           rendreTout();
           return;
         }
+        const bx = e.target.closest('[data-exclure-jour]');
+        if (bx) {
+          const d = bx.dataset.exclureJour;
+          if (!estJourSansDonnees(C, d)) {
+            const ok = await Dialogue.confirmer(
+              `La journée du ${Report.frDate(d)} contient des tâches cochées ou des notes. La retirer quand même du calendrier (les tâches redeviendront « À faire ») ?`,
+              { ok: 'Retirer ce jour', danger: true }
+            );
+            if (!ok) return;
+            (C.taches || []).forEach(t => {
+              if (t && t.statut === 'fait' && t.faitLe === d) {
+                t.statut = 'afaire';
+                t.faitLe = '';
+                t.progression = 0;
+              }
+            });
+          }
+          if (C.jours) delete C.jours[d];
+          C.joursExclus = C.joursExclus || [];
+          if (C.joursExclus.indexOf(d) < 0) C.joursExclus.push(d);
+          const restantes = Report.datesJoursTriees(C);
+          if (C.jourActif === d) C.jourActif = restantes[0] || aujourdhuiISO();
+          assurerJour(C.jourActif);
+          planifierSauvegarde();
+          dessiner(panneau);
+          toast('Journée du ' + Report.frDate(d) + ' retirée');
+          return;
+        }
         if (e.target.closest('[data-ouvrir-date]')) {
           const val = ($('#inpNouvDateJour', panneau).value || '').trim();
           if (!val) return;
-          assurerJour(val);
+          assurerJour(val, { creeManuellement: true });
+          if (!C.dateDebut || val < C.dateDebut) C.dateDebut = val;
           planifierSauvegarde();
           overlay.remove();
           rendreTout();
-          toast('Journée du ' + Report.frDate(val) + ' ouverte');
+          const b = Report.calculerBilan(C, val);
+          toast('Jour ' + b.numeroJour + ' (' + Report.frDate(val) + ') ouvert');
         }
       });
     });
@@ -8880,25 +9307,21 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
 
   function creerNouveauJourRapide() {
     const auj = aujourdhuiISO();
-    const dates = Report.datesJoursTriees(C, C.jourActif);
-    // Si aujourd'hui n'existe pas encore, l'ouvrir directement ; sinon proposer le lendemain du dernier jour
-    if (dates.indexOf(auj) < 0) {
-      assurerJour(auj);
-      planifierSauvegarde();
-      rendreTout();
-      toast('Journée d\'aujourd\'hui (' + Report.frDate(auj) + ') ouverte');
-      return;
+    const dates = Report.datesJoursTriees(C);
+    const dern = dates[dates.length - 1] || C.dateDebut || auj;
+    // N'ouvrir aujourd'hui que si aujourd'hui est postérieur au dernier jour du chantier (chantier ouvert au fil de l'eau)
+    let cible = '';
+    if (dates.indexOf(auj) < 0 && auj > dern) {
+      cible = auj;
+    } else {
+      cible = prochainJourApres(dern, !!C.inclureWeekEnd);
     }
-    const dern = dates[dates.length - 1];
-    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(dern);
-    const dSuiv = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + 1) : new Date();
-    const pad = (n) => ('0' + n).slice(-2);
-    const isoSuiv = dSuiv.getFullYear() + '-' + pad(dSuiv.getMonth() + 1) + '-' + pad(dSuiv.getDate());
-    assurerJour(isoSuiv);
+    assurerJour(cible, { creeManuellement: true });
+    if (C.dateFinPrevue && cible > C.dateFinPrevue) C.dateFinPrevue = cible;
     planifierSauvegarde();
     rendreTout();
-    const b = Report.calculerBilan(C, isoSuiv);
-    toast('Jour ' + b.numeroJour + ' (' + Report.frDate(isoSuiv) + ') créé');
+    const b = Report.calculerBilan(C, cible);
+    toast('Jour ' + b.numeroJour + ' (' + Report.frDate(cible) + ') ajouté');
   }
 
   /* ===================== Auto-remplissage intelligent du Journal ====== */
@@ -9560,6 +9983,14 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
         C.estDemo = false;
         planifierSauvegarde();
         rendreTout();
+      } else if (a === 'recaler-j1') {
+        if (C.dateDebut) {
+          recalerAvantDebutSurJ1(C, C.dateDebut);
+          synchroniserDatesChantier(C, { datesModifiees: true });
+          planifierSauvegarde();
+          rendreTout();
+          toast('✓ Jour 1 fixé au ' + Report.frDate(C.dateDebut));
+        }
       }
     });
   }
@@ -9567,7 +9998,9 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
   /* ===================== Enregistrement du Service Worker PWA ========= */
   function enregistrerServiceWorker() {
     if ('serviceWorker' in navigator && /^https?:/.test(location.protocol)) {
-      navigator.serviceWorker.register('./sw.js').catch(() => {});
+      navigator.serviceWorker.register('./sw.js').then((reg) => {
+        try { reg.update(); } catch (_) {}
+      }).catch(() => {});
     }
   }
 
@@ -9589,9 +10022,11 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
     }
     if (!C) {
       C = creerChantierDemonstration();
-      await BaseLocale.sauverChantier(C);
-      try { localStorage.setItem(CLE_COURANT, C.id); } catch (_) {}
     }
+
+    synchroniserDatesChantier(C);
+    await BaseLocale.sauverChantier(C);
+    try { localStorage.setItem(CLE_COURANT, C.id); } catch (_) {}
 
     rendreTout();
     enregistrerServiceWorker();
