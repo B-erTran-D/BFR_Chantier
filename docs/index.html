@@ -3557,6 +3557,309 @@ body.mode-rsav .actionbar #btnAjouterPiece { flex: 1 1 100%; }
   .pilotage-jour-row { gap: 5px; }
   .btn-nouveau-jour span { display: none; }
 }
+
+/* =========================================================================
+   CADENCE PLANNING, PONDÉRATION (×1/×2/×3), BLOCAGES & PHOTOS AVANT/APRÈS
+   ========================================================================= */
+.prog-track {
+  position: relative;
+}
+
+.prog-target-tick {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2.5px;
+  background: var(--bfr-secondary-dark);
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.9);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.mini-badge.cad-ok {
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+
+.mini-badge.cad-derive {
+  background: #fffbeb;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+
+.mini-badge.cad-retard {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.mini-badge.cad-planifie {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+}
+
+/* Sélecteur de pondération tâche (×1 / ×2 / ×3) */
+.poids-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.poids-opt {
+  min-height: 38px;
+  border-radius: 8px;
+  border: 1.5px solid var(--bfr-border);
+  background: #fff;
+  color: var(--bfr-text-muted);
+  font-family: var(--font-heading);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 5px 6px;
+  text-align: center;
+  transition: all 0.15s ease;
+}
+
+.poids-opt.on {
+  background: var(--bfr-primary-light);
+  border-color: var(--bfr-primary);
+  color: var(--bfr-secondary);
+  box-shadow: inset 0 0 0 1px var(--bfr-primary);
+}
+
+.tache-tag.poids {
+  background: #eef2ff;
+  color: var(--bfr-secondary);
+  border-color: #c7d2fe;
+  font-weight: 700;
+}
+
+/* Imputation & historique des points bloquants */
+.orig-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin: 6px 0 8px;
+}
+
+.orig-opt {
+  min-height: 38px;
+  border-radius: 7px;
+  border: 1.5px solid #fecaca;
+  background: #fff;
+  color: #7f1d1d;
+  font-family: var(--font-heading);
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 4px 5px;
+  text-align: center;
+}
+
+.orig-opt.on {
+  background: #991b1b;
+  border-color: #7f1d1d;
+  color: #fff;
+}
+
+.tache-tag.bloque-client {
+  background: #fee2e2;
+  color: #991b1b;
+  border-color: #f87171;
+  font-weight: 700;
+}
+
+.tache-tag.leve {
+  background: #ecfdf5;
+  color: #065f46;
+  border-color: #6ee7b7;
+  font-weight: 700;
+}
+
+.hist-bloq-liste {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.hist-bloq-item {
+  background: #f8fafc;
+  border: 1px solid var(--bfr-border);
+  border-left: 3.5px solid var(--ok);
+  border-radius: 7px;
+  padding: 7px 9px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+/* Cartes Photos : Rapport Client vs Mémo interne BFR + Duo Avant / Après */
+.ph-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
+  gap: 9px;
+}
+
+.ph-card {
+  border: 1.5px solid var(--bfr-border);
+  border-radius: 9px;
+  overflow: hidden;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+}
+
+.ph-card.interne {
+  border-style: dashed;
+  border-color: var(--bfr-secondary);
+  background: #f8f9fc;
+}
+
+.ph-img-wrap {
+  position: relative;
+  height: 100px;
+  background: #0f172a;
+}
+
+.ph-img-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  cursor: pointer;
+}
+
+.ph-vis-btn {
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  border: none;
+  border-radius: 999px;
+  padding: 2px 7px;
+  font-family: var(--font-heading);
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+}
+
+.ph-vis-btn.client {
+  background: rgba(6, 186, 242, 0.95);
+  color: #fff;
+}
+
+.ph-vis-btn.interne {
+  background: rgba(51, 46, 114, 0.95);
+  color: #fff;
+}
+
+.ph-aa-btn {
+  position: absolute;
+  bottom: 5px;
+  right: 5px;
+  border: none;
+  border-radius: 5px;
+  padding: 2px 6px;
+  font-family: var(--font-heading);
+  font-size: 9.5px;
+  font-weight: 700;
+  cursor: pointer;
+  background: rgba(15, 23, 42, 0.78);
+  color: #fff;
+}
+
+.ph-aa-btn.avant {
+  background: #d97706;
+  color: #fff;
+}
+
+.ph-aa-btn.apres {
+  background: #059669;
+  color: #fff;
+}
+
+/* Carte Duo Avant / Après côte à côte */
+.ph-duo-card {
+  grid-column: 1 / -1;
+  border: 1.5px solid var(--bfr-primary-border);
+  border-radius: 10px;
+  background: #f8fcff;
+  padding: 8px;
+}
+
+.ph-duo-card.interne {
+  border-style: dashed;
+  border-color: var(--bfr-secondary);
+  background: #f8f9fc;
+}
+
+.ph-duo-hdr {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  font-family: var(--font-heading);
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--bfr-secondary);
+}
+
+.ph-duo-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.ph-duo-slot {
+  border: 1px solid var(--bfr-border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+}
+
+.ph-duo-tag {
+  font-family: var(--font-heading);
+  font-size: 10.5px;
+  font-weight: 800;
+  text-align: center;
+  padding: 3px 6px;
+  letter-spacing: 0.04em;
+}
+
+.ph-duo-tag.avant {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.ph-duo-tag.apres {
+  background: #dcfce7;
+  color: #065f46;
+}
+
+.ph-duo-vide {
+  height: 94px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  background: #f8fafc;
+  color: var(--bfr-primary);
+  font-family: var(--font-heading);
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: center;
+  padding: 8px;
+}
+
 </style>
 </head>
 <body>
@@ -5356,6 +5659,14 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
     return 'afaire';
   }
 
+  function normaliserPoids(val) {
+    const s = String(val == null ? '' : val).trim();
+    if (!s) return 1;
+    if (/3|gros|lourd|fort|majeur|eleve|élevé/i.test(s)) return 3;
+    if (/2|moyen|important/i.test(s)) return 2;
+    return 1;
+  }
+
   /* ===================== 1. Analyse de texte libre ====================== */
   function analyserTexte(texte) {
     const lignes = String(texte || '').replace(/\r/g, '').split('\n');
@@ -5428,17 +5739,34 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
         domaine = devinerDomaine(l);
       }
 
+      // Pondération optionnelle : [x2], [x3], (x2), (x3), ×2, ×3 en début ou fin de ligne
+      let poids = 1;
+      const mPoidsDebut = /^[\[(]\s*[x×*]\s*([123])\s*[\])]\s*(.+)$/i.exec(l);
+      const mPoidsFin = /^(.+?)\s*[\[(]\s*[x×*]\s*([123])\s*[\])]$/i.exec(l);
+      if (mPoidsDebut) {
+        poids = Number(mPoidsDebut[1]) || 1;
+        l = mPoidsDebut[2].trim();
+      } else if (mPoidsFin) {
+        poids = Number(mPoidsFin[2]) || 1;
+        l = mPoidsFin[1].trim();
+      }
+
       const ph = phaseCourante || obtenirPhase('Tâches du chantier');
       taches.push({
         id: uid('tc'),
         phaseId: ph.id,
         titre: l,
         domaine: domaine,
+        poids: poids,
         statut: statut,
         progression: statut === 'fait' ? 100 : (statut === 'encours' ? 50 : 0),
         faitLe: '',
         commentaire: '',
         blocage: '',
+        blocageOrigine: statut === 'bloque' ? 'CLIENT' : '',
+        bloqueDepuis: '',
+        blocageDuree: '',
+        historiqueBlocages: [],
         photos: []
       });
     });
@@ -5494,12 +5822,13 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       phase: ['PHASE', 'PHASES', 'LOT', 'LOTS', 'ZONE', 'ZONES', 'CATEGORIE', 'SECTION', 'ETAPE', 'MACHINE'],
       titre: ['TACHE', 'TACHES', 'INTITULE', 'DESIGNATION', 'DESCRIPTION', 'LIBELLE', 'ACTION', 'TRAVAUX', 'POINT', 'ELEMENT'],
       domaine: ['DOMAINE', 'METIER', 'SPECIALITE', 'TYPE'],
+      poids: ['POIDS', 'COEFF', 'COEFFICIENT', 'IMPORTANCE', 'CHARGE'],
       statut: ['STATUT', 'ETAT', 'AVANCEMENT', 'FAIT', 'REALISE'],
       commentaire: ['COMMENTAIRE', 'COMMENTAIRES', 'NOTE', 'NOTES', 'OBSERVATION', 'OBSERVATIONS', 'REMARQUE'],
       blocage: ['BLOCAGE', 'RESERVE', 'RESERVES', 'POINTBLOQUANT', 'ALERTE']
     };
 
-    let mapCol = { phase: 0, titre: 1, domaine: 2, statut: 3, commentaire: 4, blocage: 5 };
+    let mapCol = { phase: 0, titre: 1, domaine: 2, poids: -1, statut: 3, commentaire: 4, blocage: 5 };
     let idxEntete = -1;
 
     for (let k = 0; k < Math.min(lignes.length, 8); k++) {
@@ -5561,19 +5890,26 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       const ph = obtenirPhase(dernierePhaseNom);
       const statut = normaliserStatut(lireCol(row, mapCol.statut));
       const dom = normaliserDomaine(lireCol(row, mapCol.domaine), titre);
+      const poids = normaliserPoids(lireCol(row, mapCol.poids));
       const comm = lireCol(row, mapCol.commentaire);
       const bloc = lireCol(row, mapCol.blocage);
+      const stFinal = bloc && statut === 'afaire' ? 'bloque' : statut;
 
       taches.push({
         id: uid('tc'),
         phaseId: ph.id,
         titre: titre,
         domaine: dom,
-        statut: bloc && statut === 'afaire' ? 'bloque' : statut,
-        progression: statut === 'fait' ? 100 : (statut === 'encours' ? 50 : 0),
+        poids: poids,
+        statut: stFinal,
+        progression: stFinal === 'fait' ? 100 : (stFinal === 'encours' ? 50 : 0),
         faitLe: '',
         commentaire: comm,
         blocage: bloc,
+        blocageOrigine: stFinal === 'bloque' ? 'CLIENT' : '',
+        bloqueDepuis: '',
+        blocageDuree: '',
+        historiqueBlocages: [],
         photos: []
       });
     });
@@ -5840,16 +6176,16 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
   /* ===================== 5. Modèle CSV téléchargeable =================== */
   function modeleCSV() {
     const lignes = [
-      'Phase;Tâche;Domaine;Statut;Commentaire',
-      '1. Réception & Implantation;Contrôle de la zone d\'implantation et traçage au sol;Mécanique;À faire;',
-      '1. Réception & Implantation;Déchargement et manutention des sous-ensembles en zone;Mécanique;À faire;',
-      '2. Montage mécanique;Assemblage, alignement et mise à niveau des châssis;Mécanique;À faire;',
-      '2. Montage mécanique;Fixation au sol (chevillage chimique) et montage carters;Mécanique;À faire;',
-      '3. Câblage électrique & pneumatique;Raccordement puissance 400V et inter-châssis;Électrique;À faire;',
-      '3. Câblage électrique & pneumatique;Raccordement réseau pneumatique et mise sous pression;Mécanique;À faire;',
-      '4. Automatisme & Sécurités;Test de la chaîne des arrêts d\'urgence et barrières immatérielles;Automatisme;À faire;',
-      '4. Automatisme & Sécurités;Tests E/S capteurs et sens de rotation moteurs;Automatisme;À faire;',
-      '5. Essais & Mise en route;Essais à vide puis montée en cadence avec produits client;Automatisme;À faire;'
+      'Phase;Tâche;Domaine;Poids;Statut;Commentaire',
+      '1. Réception & Implantation;Contrôle de la zone d\'implantation et traçage au sol;Mécanique;1;À faire;',
+      '1. Réception & Implantation;Déchargement et manutention des sous-ensembles en zone;Mécanique;2;À faire;',
+      '2. Montage mécanique;Assemblage, alignement et mise à niveau des châssis;Mécanique;3;À faire;',
+      '2. Montage mécanique;Fixation au sol (chevillage chimique) et montage carters;Mécanique;2;À faire;',
+      '3. Câblage électrique & pneumatique;Raccordement puissance 400V et inter-châssis;Électrique;3;À faire;',
+      '3. Câblage électrique & pneumatique;Raccordement réseau pneumatique et mise sous pression;Mécanique;1;À faire;',
+      '4. Automatisme & Sécurités;Test de la chaîne des arrêts d\'urgence et barrières immatérielles;Automatisme;2;À faire;',
+      '4. Automatisme & Sécurités;Tests E/S capteurs et sens de rotation moteurs;Automatisme;2;À faire;',
+      '5. Essais & Mise en route;Essais à vide puis montée en cadence avec produits client;Automatisme;3;À faire;'
     ];
     return new Blob(['\uFEFF' + lignes.join('\r\n')], { type: 'text/csv;charset=utf-8' });
   }
@@ -5859,56 +6195,56 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
     {
       id: 'installation_ligne',
       nom: 'Installation & Mise en service ligne BFR',
-      description: '20 tâches réparties en 5 phases : Implantation, Mécanique, Élec/Pneuma, Automatisme/Sécurité, Essais.',
+      description: '20 tâches pondérées (×1 à ×3) en 5 phases : Implantation, Mécanique, Élec/Pneuma, Automatisme, Essais.',
       texte: [
         '# 1. Réception & Implantation',
-        '- [Méca] Accueil sécurité site, permis de travail et balisage de la zone chantier',
-        '- [Méca] Réception des camions, contrôle des colis et déchargement des modules',
-        '- [Méca] Vérification du traçage au sol et des côtes d\'implantation ligne',
-        '- [Méca] Mise en place des châssis et convoyeurs selon plan d\'implantation BFR',
+        '- [Méca] Accueil sécurité site, permis de travail et balisage de la zone chantier (x1)',
+        '- [Méca] Réception des camions, contrôle des colis et déchargement des modules (x2)',
+        '- [Méca] Vérification du traçage au sol et des côtes d\'implantation ligne (x1)',
+        '- [Méca] Mise en place des châssis et convoyeurs selon plan d\'implantation BFR (x2)',
         '# 2. Montage mécanique',
-        '- [Méca] Assemblage mécanique inter-modules et jonctions convoyeurs',
-        '- [Méca] Réglage des hauteurs, niveaux laser et alignement général de la ligne',
-        '- [Méca] Ancrage / chevillage définitif au sol après validation alignement',
-        '- [Méca] Montage des carters de protection, portes d\'accès et guides produits',
+        '- [Méca] Assemblage mécanique inter-modules et jonctions convoyeurs (x3)',
+        '- [Méca] Réglage des hauteurs, niveaux laser et alignement général de la ligne (x2)',
+        '- [Méca] Ancrage / chevillage définitif au sol après validation alignement (x2)',
+        '- [Méca] Montage des carters de protection, portes d\'accès et guides produits (x2)',
         '# 3. Câblage électrique & pneumatique',
-        '- [Élec] Passage des chemins de câbles et liaisons inter-armoires',
-        '- [Élec] Raccordement des capteurs, cellules, moteurs et variateurs déportés',
-        '- [Méca] Raccordement alimentation air comprimé et test d\'étanchéité pneumatique',
-        '- [Élec] Raccordement alimentation générale 400V + Terre et vérifications hors tension',
+        '- [Élec] Passage des chemins de câbles et liaisons inter-armoires (x2)',
+        '- [Élec] Raccordement des capteurs, cellules, moteurs et variateurs déportés (x3)',
+        '- [Méca] Raccordement alimentation air comprimé et test d\'étanchéité pneumatique (x1)',
+        '- [Élec] Raccordement alimentation générale 400V + Terre et vérifications hors tension (x2)',
         '# 4. Automatisme, Robotique & Sécurités',
-        '- [Auto] Mise sous tension 24V DC, chargement / vérification programmes API & IHM',
-        '- [Auto] Validation complète de la chaîne de sécurité (AU, portes, barrières immatérielles)',
-        '- [Auto] Pointage des entrées/sorties (E/S) et contrôle des sens de rotation moteurs',
-        '- [Auto] Apprentissage des trajectoires / points de prise et dépose',
+        '- [Auto] Mise sous tension 24V DC, chargement / vérification programmes API & IHM (x2)',
+        '- [Auto] Validation complète de la chaîne de sécurité (AU, portes, barrières immatérielles) (x2)',
+        '- [Auto] Pointage des entrées/sorties (E/S) et contrôle des sens de rotation moteurs (x2)',
+        '- [Auto] Apprentissage des trajectoires / points de prise et dépose (x3)',
         '# 5. Essais produits & Mise en production',
-        '- [Auto] Essais de fonctionnement à vide en mode manuel puis cycle automatique',
-        '- [Auto] Passage des premiers produits client et ajustement des formats / guides',
-        '- [Auto] Montée en cadence nominale et suivi fiabilité en production',
-        '- [Méca] Nettoyage complet de la zone chantier, rangement outillage et point final client'
+        '- [Auto] Essais de fonctionnement à vide en mode manuel puis cycle automatique (x2)',
+        '- [Auto] Passage des premiers produits client et ajustement des formats / guides (x3)',
+        '- [Auto] Montée en cadence nominale et suivi fiabilité en production (x3)',
+        '- [Méca] Nettoyage complet de la zone chantier, rangement outillage et point final client (x1)'
       ].join('\n')
     },
     {
       id: 'retrofit_machine',
       nom: 'Rétrofit / Modification machine sur site',
-      description: '12 tâches en 4 phases : Consignation, Démontage & Mécanique, Intégration Élec/Auto, Remise en route.',
+      description: '12 tâches pondérées en 4 phases : Consignation, Démontage & Mécanique, Intégration Élec/Auto, Remise en route.',
       texte: [
         '# 1. Consignation & Préparation',
-        '- [Élec] Consignation électrique et pneumatique (LOTO) avec le référent client',
-        '- [Auto] Sauvegarde complète des programmes API, IHM et paramètres variateurs existants',
-        '- [Méca] Repérage et démontage des sous-ensembles à remplacer',
+        '- [Élec] Consignation électrique et pneumatique (LOTO) avec le référent client (x1)',
+        '- [Auto] Sauvegarde complète des programmes API, IHM et paramètres variateurs existants (x1)',
+        '- [Méca] Repérage et démontage des sous-ensembles à remplacer (x2)',
         '# 2. Adaptation mécanique',
-        '- [Méca] Montage des nouveaux sous-ensembles mécaniques BFR',
-        '- [Méca] Ajustement, alignement et contrôle des jeux fonctionnels',
-        '- [Méca] Remontage des protecteurs et adaptation carterisation',
+        '- [Méca] Montage des nouveaux sous-ensembles mécaniques BFR (x3)',
+        '- [Méca] Ajustement, alignement et contrôle des jeux fonctionnels (x2)',
+        '- [Méca] Remontage des protecteurs et adaptation carterisation (x1)',
         '# 3. Câblage & Automatisme',
-        '- [Élec] Câblage des nouveaux actionneurs / capteurs dans l\'armoire existante',
-        '- [Auto] Mise à jour du programme automate et des écrans IHM',
-        '- [Auto] Contrôle des sécurités machine et test E/S point à point',
+        '- [Élec] Câblage des nouveaux actionneurs / capteurs dans l\'armoire existante (x3)',
+        '- [Auto] Mise à jour du programme automate et des écrans IHM (x2)',
+        '- [Auto] Contrôle des sécurités machine et test E/S point à point (x2)',
         '# 4. Essais & Remise en service',
-        '- [Auto] Déconsignation, essais à vide et validation des nouveaux cycles',
-        '- [Auto] Essais en production avec les opérateurs et validation des cadences',
-        '- [Méca] Remise au propre de la zone et restitution au service production'
+        '- [Auto] Déconsignation, essais à vide et validation des nouveaux cycles (x2)',
+        '- [Auto] Essais en production avec les opérateurs et validation des cadences (x3)',
+        '- [Méca] Remise au propre de la zone et restitution au service production (x1)'
       ].join('\n')
     },
     {
@@ -5987,6 +6323,64 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
     ELECTRIQUE:  'Électrique',
     AUTOMATISME: 'Automatisme'
   };
+
+  const ORIGINES_BLOCAGE = {
+    CLIENT: { libelle: 'Attente Client',    court: 'ATTENTE CLIENT', couleur: '#b91c1c' },
+    BFR:    { libelle: 'Interne BFR',       court: 'INTERNE BFR',    couleur: '#332e72' },
+    TIERS:  { libelle: 'Tiers / Fourn.',    court: 'TIERS / FOURN.', couleur: '#b45309' }
+  };
+
+  function poidsTache(t) {
+    const p = Number(t && t.poids);
+    return (p === 2 || p === 3) ? p : 1;
+  }
+
+  function acquisTache(t) {
+    const w = poidsTache(t);
+    if (!t) return 0;
+    if (t.statut === 'fait') return w;
+    if (t.statut === 'encours') {
+      const pr = Math.min(95, Math.max(5, Number(t.progression) || 50));
+      return w * (pr / 100);
+    }
+    return 0;
+  }
+
+  /** Regroupe les photos visibles par le client en paires AVANT/APRÈS + photos simples (exclut visibilite === 'interne'). */
+  function grouperPhotosPourRapport(photosBrutes, inclureInterne) {
+    const visibles = (photosBrutes || []).filter(ph => ph && ph.dataUrl && (inclureInterne || ph.visibilite !== 'interne'));
+    const utilisees = new Set();
+    const elements = [];
+
+    for (let i = 0; i < visibles.length; i++) {
+      if (utilisees.has(i)) continue;
+      const ph = visibles[i];
+      if (ph.avantApres === 'avant') {
+        let idxApres = -1;
+        if (ph.paireId) {
+          idxApres = visibles.findIndex((x, k) => k !== i && !utilisees.has(k) && x.avantApres === 'apres' && x.paireId === ph.paireId);
+        }
+        if (idxApres < 0) {
+          idxApres = visibles.findIndex((x, k) => k > i && !utilisees.has(k) && x.avantApres === 'apres' && !x.paireId);
+        }
+        if (idxApres >= 0) {
+          utilisees.add(i);
+          utilisees.add(idxApres);
+          const phAp = visibles[idxApres];
+          const leg = [valeur(ph.legende), valeur(phAp.legende)].filter((v, idx, a) => v && a.indexOf(v) === idx).join(' -> ');
+          elements.push({ type: 'paire', avant: ph, apres: phAp, legende: leg });
+          continue;
+        }
+      }
+      utilisees.add(i);
+      elements.push({
+        type: 'simple',
+        photo: ph,
+        etiquette: ph.avantApres === 'avant' ? 'AVANT' : (ph.avantApres === 'apres' ? 'APRES' : '')
+      });
+    }
+    return elements;
+  }
 
   const ADRESSE_BFR = '50 allée des érables, 01150 Blyes, France';
 
@@ -6223,7 +6617,10 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
     const aFaire = taches.filter(t => !t.statut || t.statut === 'afaire');
 
     const total = taches.length;
-    const pctGlobal = total ? Math.round((faitTotal.length / total) * 100) : 0;
+    const estPondere = taches.some(t => poidsTache(t) > 1);
+    const poidsTotal = taches.reduce((s, t) => s + poidsTache(t), 0);
+    const poidsAcquis = taches.reduce((s, t) => s + acquisTache(t), 0);
+    const pctGlobal = poidsTotal ? Math.round((poidsAcquis / poidsTotal) * 100) : 0;
 
     // Détail par phase (dans l'ordre des phases)
     const parPhase = [];
@@ -6235,6 +6632,8 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       const nbCours = ts.filter(t => t.statut === 'encours').length;
       const nbBloq = ts.filter(t => t.statut === 'bloque').length;
       const nbAfaire = ts.length - nbFait - nbCours - nbBloq;
+      const pTot = ts.reduce((s, t) => s + poidsTache(t), 0);
+      const pAcq = ts.reduce((s, t) => s + acquisTache(t), 0);
       parPhase.push({
         id: ph.id,
         nom: ph.nom,
@@ -6245,13 +6644,15 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
         bloque: nbBloq,
         afaire: nbAfaire,
         faitCeJour: ts.filter(t => t.statut === 'fait' && t.faitLe === d).length,
-        pct: ts.length ? Math.round((nbFait / ts.length) * 100) : 0
+        pct: pTot ? Math.round((pAcq / pTot) * 100) : 0
       });
     });
     // Tâches orphelines éventuelles
     const orphelines = taches.filter(t => !idsVus.has(t.phaseId));
     if (orphelines.length) {
       const nbFait = orphelines.filter(t => t.statut === 'fait').length;
+      const pTot = orphelines.reduce((s, t) => s + poidsTache(t), 0);
+      const pAcq = orphelines.reduce((s, t) => s + acquisTache(t), 0);
       parPhase.push({
         id: '_autres',
         nom: 'Autres tâches',
@@ -6262,11 +6663,52 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
         bloque: orphelines.filter(t => t.statut === 'bloque').length,
         afaire: orphelines.filter(t => !t.statut || t.statut === 'afaire').length,
         faitCeJour: orphelines.filter(t => t.statut === 'fait' && t.faitLe === d).length,
-        pct: Math.round((nbFait / orphelines.length) * 100)
+        pct: pTot ? Math.round((pAcq / pTot) * 100) : 0
       });
     }
 
     const numeroJour = Math.max(1, dates.indexOf(d) + 1);
+    const nbJoursTotal = dates.length;
+    const pctDelai = nbJoursTotal > 0 ? Math.round((numeroJour / nbJoursTotal) * 100) : 0;
+    const auj = aujourdhuiLocalISO();
+
+    // Indicateur Cadence : Avancement réel (%) vs Jours écoulés (%)
+    let cadence;
+    if (nbJoursTotal < 2) {
+      cadence = { code: 'unique', libelle: 'Intervention 1 jour', couleur: '#06baf2', pctDelai: 100, ecart: 0, actif: false };
+    } else if (d > auj && faitTotal.length === 0 && enCours.length === 0) {
+      cadence = { code: 'planifie', libelle: 'Chantier planifié', couleur: '#64748b', pctDelai: 0, ecart: 0, actif: false };
+    } else {
+      const ecart = pctGlobal - pctDelai;
+      if (pctGlobal >= 100) {
+        cadence = { code: 'ok', libelle: 'Terminé (100 %)', couleur: '#15803d', pctDelai: pctDelai, ecart: ecart, actif: true };
+      } else if (ecart >= 10) {
+        cadence = { code: 'ok', libelle: 'En avance sur planning', couleur: '#15803d', pctDelai: pctDelai, ecart: ecart, actif: true };
+      } else if (ecart >= -10) {
+        cadence = { code: 'ok', libelle: 'Dans le planning', couleur: '#15803d', pctDelai: pctDelai, ecart: ecart, actif: true };
+      } else if (ecart >= -22) {
+        cadence = { code: 'derive', libelle: 'Légère dérive planning', couleur: '#b45309', pctDelai: pctDelai, ecart: ecart, actif: true };
+      } else {
+        cadence = { code: 'retard', libelle: 'Retard sur planning', couleur: '#b91c1c', pctDelai: pctDelai, ecart: ecart, actif: true };
+      }
+    }
+
+    // Répartition des blocages par origine & trace des blocages levés ce jour
+    const bloquesClient = bloques.filter(t => (t.blocageOrigine || 'CLIENT') === 'CLIENT');
+    const bloquesBfr = bloques.filter(t => t.blocageOrigine === 'BFR');
+    const bloquesTiers = bloques.filter(t => t.blocageOrigine === 'TIERS');
+
+    const blocagesLevesCeJour = [];
+    const blocagesLevesTotal = [];
+    taches.forEach(t => {
+      (t.historiqueBlocages || []).forEach(h => {
+        if (!h) return;
+        const item = { tache: t, phaseNom: nomPhase(t), hist: h };
+        blocagesLevesTotal.push(item);
+        if (h.leveLe === d) blocagesLevesCeJour.push(item);
+      });
+    });
+
     const jour = Object.assign({
       date: d,
       horaires: '',
@@ -6278,27 +6720,44 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       envoyeLe: ''
     }, (c.jours && c.jours[d]) || {});
 
-    const nbPhotosJour = (jour.photos || []).filter(p => p && p.dataUrl).length +
-      faitCeJour.reduce((acc, t) => acc + ((t.photos || []).filter(p => p && p.dataUrl).length), 0) +
-      bloques.reduce((acc, t) => acc + ((t.photos || []).filter(p => p && p.dataUrl).length), 0);
+    const compterClient = (arr) => (arr || []).filter(p => p && p.dataUrl && p.visibilite !== 'interne').length;
+    const compterInterne = (arr) => (arr || []).filter(p => p && p.dataUrl && p.visibilite === 'interne').length;
+
+    const nbPhotosJour = compterClient(jour.photos) +
+      faitCeJour.reduce((acc, t) => acc + compterClient(t.photos), 0) +
+      bloques.reduce((acc, t) => acc + compterClient(t.photos), 0) +
+      enCours.reduce((acc, t) => acc + compterClient((t.photos || []).filter(p => !p.datePrise || p.datePrise === d)), 0);
+
+    const nbPhotosInterne = compterInterne(jour.photos) +
+      taches.reduce((acc, t) => acc + compterInterne(t.photos), 0);
 
     return {
       dateJour: d,
       numeroJour: numeroJour,
-      nbJoursTotal: dates.length,
+      nbJoursTotal: nbJoursTotal,
       datesJours: dates,
       jour: jour,
       total: total,
+      estPondere: estPondere,
+      poidsTotal: poidsTotal,
+      poidsAcquis: poidsAcquis,
+      cadence: cadence,
       faitTotal: faitTotal,
       faitCeJour: faitCeJour,
       faitAvant: faitAvant,
       enCours: enCours,
       bloques: bloques,
+      bloquesClient: bloquesClient,
+      bloquesBfr: bloquesBfr,
+      bloquesTiers: bloquesTiers,
+      blocagesLevesCeJour: blocagesLevesCeJour,
+      blocagesLevesTotal: blocagesLevesTotal,
       aFaire: aFaire,
       pctGlobal: pctGlobal,
       parPhase: parPhase,
       nomPhase: nomPhase,
-      nbPhotosJour: nbPhotosJour
+      nbPhotosJour: nbPhotosJour,
+      nbPhotosInterne: nbPhotosInterne
     };
   }
 
@@ -6504,15 +6963,18 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       }
     }
 
-    /* Bloc Avancement Global + 4 KPIs + Tableau d'avancement par Phase */
+    /* Bloc Avancement Global + Cadence Planning + 4 KPIs + Tableau d'avancement par Phase */
     blocAvancement() {
       const p = this.pdf, C = this.C, b = this.bilan;
+      const cad = b.cadence;
+      const afficherCadence = b.nbJoursTotal >= 2;
+      const hJauge = afficherCadence ? 52 : 38;
 
-      // 1. Jauge principale d'avancement global
-      this.saut(88);
+      // 1. Jauge principale d'avancement global + Cadence planning
+      this.saut(hJauge + 50);
       const yJauge = p.y;
-      p.rect(this.M, yJauge, this.CW, 38, { fill: C.cyanClair, stroke: CYAN, lineWidth: 0.7 });
-      p.text('AVANCEMENT GLOBAL DU CHANTIER', this.M + 10, yJauge + 13, { size: 8.6, font: 'F2', color: C.navy, bold: true });
+      p.rect(this.M, yJauge, this.CW, hJauge, { fill: C.cyanClair, stroke: CYAN, lineWidth: 0.7 });
+      p.text('AVANCEMENT GLOBAL' + (b.estPondere ? ' (PONDERE)' : ''), this.M + 10, yJauge + 13, { size: 8.5, font: 'F2', color: C.navy, bold: true });
       const txtDroit = b.faitTotal.length + ' / ' + b.total + ' tâche' + (b.total > 1 ? 's' : '') + ' terminée' + (b.faitTotal.length > 1 ? 's' : '') + '  —  ' + b.pctGlobal + ' %';
       p.text(txtDroit, this.W - this.M - 12, yJauge + 13, { size: 9.4, font: 'F2', color: C.navy, align: 'right', bold: true });
 
@@ -6522,14 +6984,33 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
         const wFill = Math.max(4, (barW * Math.min(100, b.pctGlobal)) / 100);
         p.rect(barX, barY, wFill, barH, { fill: b.pctGlobal >= 100 ? hexRgb('#10b981') : CYAN });
       }
-      p.y = yJauge + 45;
+      // Repère vertical du délai théorique (Jour X / Y)
+      if (cad && cad.actif && cad.pctDelai > 0 && cad.pctDelai < 100) {
+        const tickX = barX + (barW * cad.pctDelai) / 100;
+        p.rect(tickX - 1, barY - 1.5, 2, barH + 3, { fill: C.navy });
+      }
+
+      if (afficherCadence) {
+        const txtDelai = 'Délai écoulé : Jour ' + b.numeroJour + ' / ' + b.nbJoursTotal + ' (' + cad.pctDelai + ' % du planning)';
+        p.text(txtDelai, this.M + 10, yJauge + 44, { size: 8.2, color: C.gris });
+        let txtCad = cad.libelle.toUpperCase();
+        if (b.bloquesClient.length > 0) {
+          txtCad += '  ·  ' + b.bloquesClient.length + ' ATTENTE' + (b.bloquesClient.length > 1 ? 'S' : '') + ' CLIENT';
+        }
+        p.text(txtCad, this.W - this.M - 12, yJauge + 44, { size: 8.2, font: 'F2', color: hexRgb(cad.couleur), align: 'right', bold: true });
+      }
+
+      p.y = yJauge + hJauge + 7;
 
       // 2. 4 Cartes Compteurs KPI (Fait ce jour / Total terminé / En cours / Bloqués)
+      const libBloq = b.bloquesClient.length
+        ? ('Bloqués (dont ' + b.bloquesClient.length + ' Client)')
+        : 'Points bloquants';
       const kpis = [
         { n: '+' + b.faitCeJour.length, lib: 'Fait ce jour (' + frDateCourte(b.dateJour) + ')', coul: '#15803d' },
-        { n: b.faitTotal.length + '/' + b.total, lib: 'Total terminé (' + b.pctGlobal + ' %)', coul: '#0369a1' },
+        { n: b.faitTotal.length + '/' + b.total, lib: 'Avancement : ' + b.pctGlobal + ' %', coul: '#0369a1' },
         { n: String(b.enCours.length), lib: 'En cours', coul: '#b45309' },
-        { n: String(b.bloques.length), lib: 'Points bloquants', coul: b.bloques.length ? '#b91c1c' : '#64748b' }
+        { n: String(b.bloques.length), lib: libBloq, coul: b.bloques.length ? '#b91c1c' : '#64748b' }
       ];
       const gap = 6;
       const caseW = (this.CW - (kpis.length - 1) * gap) / kpis.length;
@@ -6538,7 +7019,7 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
         const x = this.M + idx * (caseW + gap);
         p.rect(x, yKpi, caseW, 34, { fill: hexClair(k.coul, 0.90), stroke: hexRgb(k.coul), lineWidth: 0.6 });
         p.text(k.n, x + caseW / 2, yKpi + 16.5, { size: 14.5, font: 'F2', color: hexRgb(k.coul), align: 'center', bold: true });
-        p.text(Pdf.trunc(k.lib, caseW - 6, 7.6), x + caseW / 2, yKpi + 28, { size: 7.6, color: C.gris, align: 'center' });
+        p.text(Pdf.trunc(k.lib, caseW - 6, 7.5), x + caseW / 2, yKpi + 28, { size: 7.5, color: C.gris, align: 'center' });
       });
       p.y = yKpi + 42;
 
@@ -6590,14 +7071,80 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       }
     }
 
-    /* Photos harmonisées (1 colonne héro ou grille 2 colonnes — identique BFR_Repport) */
-    async photos(liste, avecNumero) {
-      const valides = (liste || []).filter(ph => ph && ph.dataUrl);
-      if (!valides.length) return;
+    /* Cadre comparatif AVANT / APRES côte à côte */
+    async photoPaireAvantApres(paire, contexte) {
+      const jAv = await toJpeg(paire.avant.dataUrl, 1000, 0.85);
+      const jAp = await toJpeg(paire.apres.dataUrl, 1000, 0.85);
+      if (!jAv && !jAp) return;
+      const p = this.pdf, C = this.C;
+      const gap = 8;
+      const colW = (this.CW - gap - 12) / 2;
+      const hImg = 148;
+      const legGlobale = [paire.legende, contexte].filter(Boolean)[0] || '';
+      const hTot = 18 + 15 + hImg + (legGlobale ? 15 : 4) + 6;
+
+      this.saut(hTot);
+      const y0 = p.y;
+      p.rect(this.M, y0, this.CW, hTot - 4, { fill: [0.985, 0.995, 1], stroke: CYAN, lineWidth: 0.6 });
+      p.rect(this.M, y0, this.CW, 16, { fill: C.cyanClair });
+      const numP = ++this.numeroPhoto;
+      p.text('COMPARATIF AVANT / APRES  —  PHOTO ' + numP, this.M + 8, y0 + 11.2, { size: 8.0, font: 'F2', color: C.navy, bold: true });
+
+      const dessinerSlot = (j, idx, label, coulHex) => {
+        const sx = this.M + 6 + idx * (colW + gap);
+        const sy = y0 + 20;
+        p.rect(sx, sy, colW, 13, { fill: hexClair(coulHex, 0.86), stroke: hexRgb(coulHex), lineWidth: 0.4 });
+        p.text(label, sx + colW / 2, sy + 9.4, { size: 7.8, font: 'F2', color: hexRgb(coulHex), align: 'center', bold: true });
+        p.rect(sx, sy + 13, colW, hImg, { fill: [1, 1, 1], stroke: C.bord, lineWidth: 0.4 });
+        if (j) {
+          const bytes = Pdf.dataUrlToBytes(j.dataUrl);
+          const rImg = j.w / j.h, rBox = (colW - 4) / (hImg - 4);
+          let iw, ih;
+          if (rImg >= rBox) { iw = colW - 4; ih = iw / rImg; }
+          else { ih = hImg - 4; iw = ih * rImg; }
+          p.image(bytes, sx + 2 + (colW - 4 - iw) / 2, sy + 15 + (hImg - 4 - ih) / 2, iw, ih);
+        }
+      };
+
+      dessinerSlot(jAv, 0, 'AVANT', '#b45309');
+      dessinerSlot(jAp, 1, 'APRES', '#15803d');
+
+      if (legGlobale) {
+        p.text(Pdf.trunc(legGlobale, this.CW - 18, 8.2), this.M + this.CW / 2, y0 + 20 + 13 + hImg + 11,
+          { size: 8.2, color: C.gris, align: 'center' });
+      }
+      p.y = y0 + hTot + 3;
+    }
+
+    /* Photos harmonisées (exclut Mémo interne BFR + gère les duos Avant / Après) */
+    async photos(liste, avecNumero, contexte) {
+      const groupes = grouperPhotosPourRapport(liste, false);
+      if (!groupes.length) return;
       const p = this.pdf, C = this.C;
       const gap = 10;
       const colW = (this.CW - gap) / 2;
 
+      // Extraire d'abord les paires Avant/Après, puis grouper les photos simples par 1 ou 2
+      const simples = [];
+      for (const g of groupes) {
+        if (g.type === 'paire') {
+          if (simples.length) { await this._photosSimples(simples, avecNumero, colW, gap); simples.length = 0; }
+          await this.photoPaireAvantApres(g, contexte);
+        } else {
+          simples.push({
+            dataUrl: g.photo.dataUrl,
+            legende: g.photo.legende || contexte || '',
+            etiquette: g.etiquette || ''
+          });
+        }
+      }
+      if (simples.length) {
+        await this._photosSimples(simples, avecNumero, colW, gap);
+      }
+    }
+
+    async _photosSimples(valides, avecNumero, colW, gap) {
+      const p = this.pdf, C = this.C;
       if (valides.length === 1) {
         const it = valides[0];
         const j = await toJpeg(it.dataUrl, 1200, 0.86);
@@ -6608,7 +7155,8 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
         let iw, ih;
         if (rImg >= rBox) { iw = wBox - 4; ih = iw / rImg; }
         else { ih = hBox - 4; iw = ih * rImg; }
-        const leg = avecNumero ? ('Photo ' + (++this.numeroPhoto) + (it.legende ? ' — ' + it.legende : '')) : (it.legende || '');
+        const pref = it.etiquette ? ('[' + it.etiquette + '] ') : '';
+        const leg = avecNumero ? ('Photo ' + (++this.numeroPhoto) + ' — ' + pref + (it.legende || '')).replace(/ — $/, '') : (pref + (it.legende || ''));
         const reqH = hBox + (leg ? 16 : 0) + 8;
         this.saut(reqH);
         const cx = this.M + (this.CW - wBox) / 2, cy = p.y;
@@ -6623,7 +7171,7 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       for (let i = 0; i < valides.length; i += 2) {
         const lot = valides.slice(i, i + 2);
         const jpegs = await Promise.all(lot.map(it => toJpeg(it.dataUrl, 1000, 0.85)));
-        const aLeg = avecNumero || lot.some(it => valeur(it.legende));
+        const aLeg = avecNumero || lot.some(it => valeur(it.legende) || it.etiquette);
         const reqH = hBox + (aLeg ? 16 : 0) + 8;
         this.saut(reqH);
         const y = p.y;
@@ -6639,7 +7187,8 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
           p.rect(x, y, colW, hBox, { fill: [1, 1, 1], stroke: C.bord, lineWidth: 0.5 });
           p.image(bytes, x + 2 + (colW - 4 - iw) / 2, y + 2 + (hBox - 4 - ih) / 2, iw, ih);
           if (aLeg) {
-            const leg = avecNumero ? ('Photo ' + (++this.numeroPhoto) + (it.legende ? ' — ' + it.legende : '')) : (it.legende || '');
+            const pref = it.etiquette ? ('[' + it.etiquette + '] ') : '';
+            const leg = avecNumero ? ('Photo ' + (++this.numeroPhoto) + ' — ' + pref + (it.legende || '')).replace(/ — $/, '') : (pref + (it.legende || ''));
             p.text(Pdf.trunc(leg, colW, 8.2), x, y + hBox + 11, { size: 8.2, color: C.gris });
           }
         });
@@ -6647,7 +7196,7 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       }
     }
 
-    /* Carte détaillée d'une tâche (Fait ce jour, Bloqué ou En cours) avec notes et photos */
+    /* Carte détaillée d'une tâche (Fait ce jour, Bloqué ou En cours) avec notes, origine blocage et photos */
     async blocTacheDetail(t, mode) {
       const p = this.pdf, C = this.C, b = this.bilan;
       const st = STATUTS[mode] || STATUTS[t.statut] || STATUTS.afaire;
@@ -6655,26 +7204,47 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       const fond = hexClair(st.couleur, 0.92);
       const phNom = b.nomPhase(t);
       const domNom = DOMAINES[t.domaine] || '';
+      const wPoids = poidsTache(t);
 
-      const note = mode === 'bloque'
-        ? [valeur(t.blocage) ? 'Point bloquant : ' + valeur(t.blocage) : '', valeur(t.commentaire)].filter(Boolean).join('\n')
-        : valeur(t.commentaire);
+      let note = '';
+      if (mode === 'bloque') {
+        const infosBloq = [];
+        if (valeur(t.bloqueDepuis)) {
+          const idxJ = b.datesJours.indexOf(t.bloqueDepuis);
+          infosBloq.push('Depuis le ' + frDate(t.bloqueDepuis) + (idxJ >= 0 ? ' (J' + (idxJ + 1) + ')' : ''));
+        }
+        if (valeur(t.blocageDuree)) infosBloq.push('Attente / impact : ' + valeur(t.blocageDuree));
+        note = [
+          valeur(t.blocage) ? 'Point bloquant : ' + valeur(t.blocage) : '',
+          infosBloq.join('  ·  '),
+          valeur(t.commentaire)
+        ].filter(Boolean).join('\n');
+      } else {
+        note = valeur(t.commentaire);
+      }
 
-      const lignesTitre = Pdf.wrap(valeur(t.titre), this.CW - 20, 9.8, true);
+      const titreAffiche = valeur(t.titre) + (wPoids > 1 ? '  (x' + wPoids + ')' : '');
+      const lignesTitre = Pdf.wrap(titreAffiche, this.CW - 20, 9.8, true);
       const lignesNote = note ? Pdf.wrap(note, this.CW - 22, 9.0) : [];
       const hCarte = 19 + lignesTitre.length * 13 + (lignesNote.length ? lignesNote.length * 12 + 6 : 4) + 5;
 
       this.saut(Math.min(hCarte, 140));
       const y0 = p.y;
       p.rect(this.M, y0, this.CW, hCarte, { fill: [1, 1, 1], stroke: C.bord, lineWidth: 0.5 });
-      // Bandeau supérieur fin
       p.rect(this.M, y0, this.CW, 16, { fill: fond });
       p.rect(this.M, y0, 3.8, hCarte, { fill: coul });
 
       const metaGauche = phNom + (domNom ? '  ·  ' + domNom : '');
-      p.text(Pdf.trunc(metaGauche, this.CW * 0.68, 8.3, true), this.M + 9, y0 + 11.2, { size: 8.3, font: 'F2', color: coul, bold: true });
-      const badgeDroite = mode === 'encours' && t.progression ? (st.court + ' (' + t.progression + ' %)') : st.court;
-      p.text(badgeDroite, this.W - this.M - 8, y0 + 11.2, { size: 8.0, font: 'F2', color: coul, align: 'right', bold: true });
+      p.text(Pdf.trunc(metaGauche, this.CW * 0.58, 8.3, true), this.M + 9, y0 + 11.2, { size: 8.3, font: 'F2', color: coul, bold: true });
+
+      let badgeDroite = st.court;
+      if (mode === 'encours' && t.progression) {
+        badgeDroite = st.court + ' (' + t.progression + ' %)';
+      } else if (mode === 'bloque') {
+        const orig = ORIGINES_BLOCAGE[t.blocageOrigine || 'CLIENT'] || ORIGINES_BLOCAGE.CLIENT;
+        badgeDroite = 'BLOQUE — ' + orig.court;
+      }
+      p.text(badgeDroite, this.W - this.M - 8, y0 + 11.2, { size: 7.9, font: 'F2', color: coul, align: 'right', bold: true });
 
       let yc = y0 + 28;
       lignesTitre.forEach(l => {
@@ -6690,13 +7260,53 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       }
       p.y = y0 + hCarte + 5;
 
-      const phs = (t.photos || []).filter(ph => ph && ph.dataUrl);
+      const phs = (t.photos || []).filter(ph => ph && ph.dataUrl && ph.visibilite !== 'interne');
       if (phs.length) {
-        await this.photos(phs.map(ph => ({
-          dataUrl: ph.dataUrl,
-          legende: ph.legende || valeur(t.titre)
-        })), true);
+        await this.photos(phs, true, valeur(t.titre));
       }
+    }
+
+    /* Carte de traçabilité d'un blocage levé sur la journée */
+    blocLeveeBlocage(item) {
+      const p = this.pdf, C = this.C;
+      const t = item.tache, h = item.hist;
+      const orig = ORIGINES_BLOCAGE[h.origine || 'CLIENT'] || ORIGINES_BLOCAGE.CLIENT;
+      const coul = hexRgb('#15803d');
+      const fond = hexClair('#15803d', 0.91);
+
+      const trace = [
+        h.debutLe ? ('Bloqué le ' + frDateCourte(h.debutLe) + ' -> Levé le ' + frDateCourte(h.leveLe || this.bilan.dateJour)) : ('Levé le ' + frDateCourte(h.leveLe || this.bilan.dateJour)),
+        valeur(h.duree) ? ('Attente / impact : ' + valeur(h.duree)) : '',
+        valeur(h.motif) ? ('Motif initial : ' + valeur(h.motif)) : '',
+        valeur(h.noteLevee) ? ('Résolution : ' + valeur(h.noteLevee)) : ''
+      ].filter(Boolean).join('  ·  ');
+
+      const lignesTitre = Pdf.wrap(valeur(t.titre), this.CW - 20, 9.5, true);
+      const lignesTrace = trace ? Pdf.wrap(trace, this.CW - 22, 8.7) : [];
+      const hCarte = 19 + lignesTitre.length * 12.5 + (lignesTrace.length ? lignesTrace.length * 11.5 + 5 : 4) + 5;
+
+      this.saut(Math.min(hCarte, 120));
+      const y0 = p.y;
+      p.rect(this.M, y0, this.CW, hCarte, { fill: [1, 1, 1], stroke: C.bord, lineWidth: 0.5 });
+      p.rect(this.M, y0, this.CW, 16, { fill: fond });
+      p.rect(this.M, y0, 3.8, hCarte, { fill: coul });
+
+      p.text(Pdf.trunc(item.phaseNom + '  ·  ' + orig.libelle, this.CW * 0.62, 8.2, true), this.M + 9, y0 + 11.2, { size: 8.2, font: 'F2', color: coul, bold: true });
+      p.text('POINT BLOQUANT LEVE CE JOUR', this.W - this.M - 8, y0 + 11.2, { size: 7.8, font: 'F2', color: coul, align: 'right', bold: true });
+
+      let yc = y0 + 27.5;
+      lignesTitre.forEach(l => {
+        p.text(l, this.M + 9, yc, { size: 9.5, font: 'F2', color: C.texte, bold: true });
+        yc += 12.5;
+      });
+      if (lignesTrace.length) {
+        yc += 2;
+        lignesTrace.forEach(l => {
+          p.text(l, this.M + 11, yc, { size: 8.7, color: C.gris });
+          yc += 11.5;
+        });
+      }
+      p.y = y0 + hCarte + 5;
     }
 
     /* Tableau synthétique complet de toutes les tâches du chantier */
@@ -6737,7 +7347,9 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
         p.y = yp + 16;
 
         ph.taches.forEach(t => {
-          const lignesT = Pdf.wrap(valeur(t.titre), colTacheW - 12, 8.7).slice(0, 3);
+          const wP = poidsTache(t);
+          const txtTache = valeur(t.titre) + (wP > 1 ? ' (x' + wP + ')' : '');
+          const lignesT = Pdf.wrap(txtTache, colTacheW - 12, 8.7).slice(0, 3);
           const hRow = Math.max(18, lignesT.length * 11 + 6);
           if (p.y + hRow > this.limiteBas()) {
             p.newPage();
@@ -6805,15 +7417,20 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
         this.blocTexte('Compte rendu de la journée', b.jour.synthese, CYAN, [0.975, 0.99, 1]);
       }
 
-      // 3. Section 2 : Points bloquants, aléas & réserves (affiché s'il y en a)
-      if (b.bloques.length > 0 || valeur(b.jour.aleas)) {
-        const sousBloq = b.bloques.length ? (b.bloques.length + ' point' + (b.bloques.length > 1 ? 's' : '') + ' bloquant' + (b.bloques.length > 1 ? 's' : '')) : 'Signalement';
-        this.titreSection((numSec++) + '. Points bloquants & Réserves', sousBloq, 55);
+      // 3. Section 2 : Points bloquants, attentes client & levées de blocage du jour
+      if (b.bloques.length > 0 || b.blocagesLevesCeJour.length > 0 || valeur(b.jour.aleas)) {
+        const partsBloq = [];
+        if (b.bloques.length) partsBloq.push(b.bloques.length + ' actif' + (b.bloques.length > 1 ? 's' : ''));
+        if (b.blocagesLevesCeJour.length) partsBloq.push(b.blocagesLevesCeJour.length + ' levé' + (b.blocagesLevesCeJour.length > 1 ? 's' : '') + ' ce jour');
+        this.titreSection((numSec++) + '. Points bloquants, Attentes & Levées', partsBloq.join(' · ') || 'Signalement', 55);
         if (valeur(b.jour.aleas)) {
           this.blocTexte('Aléas / Points d\'attention signalés ce jour', b.jour.aleas, hexRgb('#b91c1c'), [1, 0.97, 0.97]);
         }
         for (const t of b.bloques) {
           await this.blocTacheDetail(t, 'bloque');
+        }
+        for (const item of b.blocagesLevesCeJour) {
+          this.blocLeveeBlocage(item);
         }
       }
 
@@ -6842,11 +7459,11 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
         }
       }
 
-      // 6. Section 5 : Photos complémentaires du jour
-      const photosJour = (b.jour.photos || []).filter(ph => ph && ph.dataUrl);
+      // 6. Section 5 : Photos complémentaires du jour (hors mémo interne BFR)
+      const photosJour = (b.jour.photos || []).filter(ph => ph && ph.dataUrl && ph.visibilite !== 'interne');
       if (photosJour.length > 0) {
         this.titreSection((numSec++) + '. Photos d\'avancement du jour', photosJour.length + ' photo' + (photosJour.length > 1 ? 's' : ''), 175);
-        await this.photos(photosJour, true);
+        await this.photos(photosJour, true, '');
       }
 
       // 7. Section 6 : État complet de la checklist chantier (sauf si désactivé dans les réglages)
@@ -6929,45 +7546,79 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       ]
     ], { largeurs: [25, 25, 25, 25] });
 
+    if (b.nbJoursTotal >= 2 && b.cadence) {
+      doc.para([
+        { t: 'Cadence planning : ', gras: true, couleur: '332E72' },
+        { t: b.cadence.libelle, gras: true, couleur: b.cadence.couleur.replace('#', '').toUpperCase() },
+        { t: ' — Avancement ' + b.pctGlobal + ' % pour ' + b.cadence.pctDelai + ' % du délai écoulé (Jour ' + b.numeroJour + ' / ' + b.nbJoursTotal + ')' }
+      ], { avant: 80, apres: 80 });
+    }
+
     if (valeur(b.jour.synthese)) {
       doc.para('Compte rendu de la journée :', { font: 'Poppins', gras: true, taille: 10.5, couleur: '332E72', avant: 120, apres: 40 });
       doc.para(b.jour.synthese, { apres: 140 });
     }
 
-    if (b.bloques.length || valeur(b.jour.aleas)) {
-      doc.bandeau((numSec++) + '. POINTS BLOQUANTS & RÉSERVES', 'DC2626', b.bloques.length + ' point(s)');
+    async function insererPhotosWord(photosBrutes, contexte) {
+      const groupes = grouperPhotosPourRapport(photosBrutes, false);
+      for (const g of groupes) {
+        if (g.type === 'paire') {
+          doc.para('⚖ Comparatif AVANT / APRÈS' + (g.legende || contexte ? ' — ' + (g.legende || contexte) : ''), { gras: true, taille: 9.5, couleur: '332E72', avant: 60, apres: 30 });
+          const jAv = await toJpeg(g.avant.dataUrl, 1000, 0.85);
+          if (jAv) doc.image(jAv.dataUrl, 9.5, { legende: 'AVANT' + (g.avant.legende ? ' — ' + g.avant.legende : '') });
+          const jAp = await toJpeg(g.apres.dataUrl, 1000, 0.85);
+          if (jAp) doc.image(jAp.dataUrl, 9.5, { legende: 'APRÈS' + (g.apres.legende ? ' — ' + g.apres.legende : '') });
+        } else {
+          const jp = await toJpeg(g.photo.dataUrl, 1000, 0.85);
+          const pref = g.etiquette ? '[' + g.etiquette + '] ' : '';
+          if (jp) doc.image(jp.dataUrl, 11, { legende: pref + (g.photo.legende || contexte || '') });
+        }
+      }
+    }
+
+    if (b.bloques.length || b.blocagesLevesCeJour.length || valeur(b.jour.aleas)) {
+      doc.bandeau((numSec++) + '. POINTS BLOQUANTS, ATTENTES & LEVÉES', 'DC2626', b.bloques.length + ' actif(s)');
       if (valeur(b.jour.aleas)) doc.para(b.jour.aleas, { couleur: '991B1B', gras: true, apres: 100 });
       for (const tc of b.bloques) {
+        const orig = ORIGINES_BLOCAGE[tc.blocageOrigine || 'CLIENT'] || ORIGINES_BLOCAGE.CLIENT;
         doc.para([
-          { t: '[' + b.nomPhase(tc) + '] ', gras: true, couleur: 'B91C1C' },
+          { t: '[' + orig.libelle + ' · ' + b.nomPhase(tc) + '] ', gras: true, couleur: 'B91C1C' },
           { t: tc.titre, gras: true }
         ], { apres: 30 });
-        if (valeur(tc.blocage) || valeur(tc.commentaire)) {
-          doc.para([valeur(tc.blocage), valeur(tc.commentaire)].filter(Boolean).join(' — '), { couleur: '991B1B', apres: 90 });
-        }
-        for (const ph of (tc.photos || [])) {
-          if (ph && ph.dataUrl) {
-            const jp = await toJpeg(ph.dataUrl, 1000, 0.85);
-            if (jp) doc.image(jp.dataUrl, 11, { legende: ph.legende || tc.titre });
-          }
-        }
+        const detBloq = [
+          valeur(tc.blocage),
+          valeur(tc.bloqueDepuis) ? 'Depuis le ' + frDate(tc.bloqueDepuis) : '',
+          valeur(tc.blocageDuree) ? 'Attente : ' + valeur(tc.blocageDuree) : '',
+          valeur(tc.commentaire)
+        ].filter(Boolean).join(' — ');
+        if (detBloq) doc.para(detBloq, { couleur: '991B1B', apres: 90 });
+        await insererPhotosWord(tc.photos, tc.titre);
+      }
+      for (const it of b.blocagesLevesCeJour) {
+        const orig = ORIGINES_BLOCAGE[it.hist.origine || 'CLIENT'] || ORIGINES_BLOCAGE.CLIENT;
+        doc.para([
+          { t: '✓ [BLOCAGE LEVÉ CE JOUR · ' + orig.libelle + '] ', gras: true, couleur: '15803D' },
+          { t: it.tache.titre, gras: true }
+        ], { apres: 25 });
+        const tr = [
+          it.hist.debutLe ? ('Bloqué le ' + frDateCourte(it.hist.debutLe) + ' → Levé le ' + frDateCourte(it.hist.leveLe)) : '',
+          valeur(it.hist.duree) ? ('Attente : ' + valeur(it.hist.duree)) : '',
+          valeur(it.hist.motif)
+        ].filter(Boolean).join(' · ');
+        if (tr) doc.para(tr, { couleur: '475569', apres: 80 });
       }
     }
 
     doc.bandeau((numSec++) + '. TRAVAUX RÉALISÉS CE JOUR (' + frDate(b.dateJour) + ')', '06BAF2', b.faitCeJour.length + ' tâche(s)');
     if (b.faitCeJour.length) {
       for (const tc of b.faitCeJour) {
+        const wP = poidsTache(tc);
         doc.para([
           { t: '✓ [' + b.nomPhase(tc) + '] ', gras: true, couleur: '15803D' },
-          { t: tc.titre, gras: true }
+          { t: tc.titre + (wP > 1 ? ' (×' + wP + ')' : ''), gras: true }
         ], { apres: 30 });
         if (valeur(tc.commentaire)) doc.para(tc.commentaire, { couleur: '475569', apres: 80 });
-        for (const ph of (tc.photos || [])) {
-          if (ph && ph.dataUrl) {
-            const jp = await toJpeg(ph.dataUrl, 1000, 0.85);
-            if (jp) doc.image(jp.dataUrl, 11, { legende: ph.legende || tc.titre });
-          }
-        }
+        await insererPhotosWord(tc.photos, tc.titre);
       }
     } else {
       doc.para('Aucune tâche clôturée définitivement sur cette journée.', { italique: true, couleur: '64748B' });
@@ -6975,26 +7626,24 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
 
     if (b.enCours.length || valeur(b.jour.prevuDemain)) {
       doc.bandeau((numSec++) + '. EN COURS & PROGRAMME PRÉVU DEMAIN', '06BAF2');
-      b.enCours.forEach(tc => {
+      for (const tc of b.enCours) {
         doc.para([
           { t: '• [' + b.nomPhase(tc) + '] ', gras: true, couleur: 'B45309' },
           { t: tc.titre + (tc.progression ? ' (' + tc.progression + ' %)' : '') },
           tc.commentaire ? { t: ' — ' + tc.commentaire, couleur: '64748B' } : { t: '' }
         ], { apres: 50 });
-      });
+        await insererPhotosWord((tc.photos || []).filter(p => !p.datePrise || p.datePrise === b.dateJour), tc.titre);
+      }
       if (valeur(b.jour.prevuDemain)) {
         doc.para('Prévu demain / Suite :', { font: 'Poppins', gras: true, taille: 10.5, couleur: '332E72', avant: 100, apres: 40 });
         doc.para(b.jour.prevuDemain);
       }
     }
 
-    const photosJour = (b.jour.photos || []).filter(p => p && p.dataUrl);
+    const photosJour = (b.jour.photos || []).filter(p => p && p.dataUrl && p.visibilite !== 'interne');
     if (photosJour.length) {
       doc.bandeau((numSec++) + '. PHOTOS DU JOUR', '06BAF2', photosJour.length + ' photo(s)');
-      for (const ph of photosJour) {
-        const jp = await toJpeg(ph.dataUrl, 1000, 0.85);
-        if (jp) doc.image(jp.dataUrl, 12, { legende: ph.legende || '' });
-      }
+      await insererPhotosWord(photosJour, '');
     }
 
     if ((!s.rapport || s.rapport.inclureChecklist !== false) && b.total > 0) {
@@ -7067,8 +7716,9 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
     if (valeur(c.client && c.client.nom)) {
       lignes.push('• Client / Site : ' + valeur(c.client.nom) + (valeur(c.client.lieu) ? ' — ' + valeur(c.client.lieu) : ''));
     }
-    lignes.push('• Journée : Jour ' + b.numeroJour + ' — ' + frDate(b.dateJour));
-    lignes.push('• Avancement global : ' + b.pctGlobal + ' % (' + b.faitTotal.length + ' / ' + b.total + ' tâches terminées)');
+    lignes.push('• Journée : Jour ' + b.numeroJour + (b.nbJoursTotal > 1 ? ' / ' + b.nbJoursTotal : '') + ' — ' + frDate(b.dateJour));
+    lignes.push('• Avancement global : ' + b.pctGlobal + ' % (' + b.faitTotal.length + ' / ' + b.total + ' tâches terminées)' +
+      (b.nbJoursTotal > 1 && b.cadence && b.cadence.actif ? ' — ' + b.cadence.libelle + ' (délai J' + b.numeroJour + '/' + b.nbJoursTotal + ' : ' + b.cadence.pctDelai + '%)' : ''));
     lignes.push('');
 
     if (valeur(b.jour.synthese)) {
@@ -7077,11 +7727,22 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       lignes.push('');
     }
 
-    if (b.bloques.length > 0 || valeur(b.jour.aleas)) {
-      lignes.push('⚠ POINTS BLOQUANTS / RÉSERVES (' + b.bloques.length + ') :');
+    if (b.bloques.length > 0 || b.blocagesLevesCeJour.length > 0 || valeur(b.jour.aleas)) {
+      lignes.push('⚠ POINTS BLOQUANTS / ATTENTES (' + b.bloques.length + ' actif' + (b.bloques.length > 1 ? 's' : '') + ') :');
       if (valeur(b.jour.aleas)) lignes.push('- ' + valeur(b.jour.aleas));
       b.bloques.forEach(tc => {
-        lignes.push('- [' + b.nomPhase(tc) + '] ' + tc.titre + (valeur(tc.blocage) ? ' → ' + valeur(tc.blocage) : ''));
+        const orig = ORIGINES_BLOCAGE[tc.blocageOrigine || 'CLIENT'] || ORIGINES_BLOCAGE.CLIENT;
+        const details = [
+          valeur(tc.blocage),
+          valeur(tc.bloqueDepuis) ? 'depuis le ' + frDateCourte(tc.bloqueDepuis) : '',
+          valeur(tc.blocageDuree) ? 'attente ' + valeur(tc.blocageDuree) : ''
+        ].filter(Boolean).join(' · ');
+        lignes.push('- [' + orig.libelle.toUpperCase() + ' — ' + b.nomPhase(tc) + '] ' + tc.titre + (details ? ' → ' + details : ''));
+      });
+      b.blocagesLevesCeJour.forEach(it => {
+        const orig = ORIGINES_BLOCAGE[it.hist.origine || 'CLIENT'] || ORIGINES_BLOCAGE.CLIENT;
+        lignes.push('✓ [LEVÉ CE JOUR — ' + orig.libelle + '] ' + it.tache.titre +
+          (it.hist.debutLe ? ' (bloqué le ' + frDateCourte(it.hist.debutLe) + (valeur(it.hist.duree) ? ', attente ' + valeur(it.hist.duree) : '') + ')' : ''));
       });
       lignes.push('');
     }
@@ -7118,6 +7779,9 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
   global.Report = {
     STATUTS: STATUTS,
     DOMAINES: DOMAINES,
+    ORIGINES_BLOCAGE: ORIGINES_BLOCAGE,
+    poidsTache: poidsTache,
+    grouperPhotosPourRapport: grouperPhotosPourRapport,
     frDate: frDate,
     frDateCourte: frDateCourte,
     jourSemaineFr: jourSemaineFr,
@@ -7365,15 +8029,15 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
         slots.push({ id: c.client.logoId, get: () => c.client.logo, set: (v) => { c.client.logo = v; } });
       }
       (c.taches || []).forEach(t => {
-        (t.photos || []).forEach((ph, i) => {
-          if (!ph.id) ph.id = 'pht_' + c.id + '_' + t.id + '_' + i;
+        (t.photos || []).forEach((ph) => {
+          if (!ph.id) ph.id = uid('pht');
           slots.push({ id: ph.id, get: () => ph.dataUrl, set: (v) => { ph.dataUrl = v; } });
         });
       });
       Object.keys(c.jours || {}).forEach(d => {
         const j = c.jours[d];
-        ((j && j.photos) || []).forEach((ph, i) => {
-          if (!ph.id) ph.id = 'phj_' + c.id + '_' + d + '_' + i;
+        ((j && j.photos) || []).forEach((ph) => {
+          if (!ph.id) ph.id = uid('phj');
           slots.push({ id: ph.id, get: () => ph.dataUrl, set: (v) => { ph.dataUrl = v; } });
         });
       });
@@ -7580,10 +8244,29 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       { id: uid('dst'), nom: 'Responsable Montage / SAV', role: 'BFR Systems — Coordination', email: 'sav@bfr-systems.example', type: 'cc', actif: true }
     ];
 
-    // Marquage réaliste sur 2 jours (J1 hier + J2 aujourd'hui)
+    // Marquage réaliste sur 4 jours planifiés (J1 hier + J2 aujourd'hui + J3/J4 suite)
+    const dFin = new Date();
+    dFin.setDate(dFin.getDate() + 2);
+    const pad2 = (n) => ('0' + n).slice(-2);
+    ch.dateFinPrevue = dFin.getFullYear() + '-' + pad2(dFin.getMonth() + 1) + '-' + pad2(dFin.getDate());
+    ch.inclureWeekEnd = true;
+
     const ts = ch.taches;
     [0, 1, 2, 3].forEach(i => { if (ts[i]) { ts[i].statut = 'fait'; ts[i].faitLe = j1; ts[i].progression = 100; } });
-    if (ts[4]) { ts[4].statut = 'fait'; ts[4].faitLe = j2; ts[4].progression = 100; ts[4].commentaire = 'Assemblage mécanique validé entre cellule et convoyeur d\'entrée.'; }
+    if (ts[4]) {
+      ts[4].statut = 'fait'; ts[4].faitLe = j2; ts[4].progression = 100;
+      ts[4].commentaire = 'Assemblage mécanique validé entre cellule et convoyeur d\'entrée.';
+      // Exemple de trace de blocage levé (attente chariot élévateur client J1 -> levé J2)
+      ts[4].historiqueBlocages = [{
+        id: uid('blq'),
+        origine: 'CLIENT',
+        motif: 'Zone d\'assemblage encombrée par palettes client',
+        debutLe: j1,
+        leveLe: j2,
+        duree: '2h30',
+        noteLevee: 'Zone dégagée par le cariste client à 10h00'
+      }];
+    }
     if (ts[5]) { ts[5].statut = 'fait'; ts[5].faitLe = j2; ts[5].progression = 100; ts[5].commentaire = 'Nivellement laser contrôlé sur toute la ligne (+/- 0,5 mm).'; }
     if (ts[6]) { ts[6].statut = 'fait'; ts[6].faitLe = j2; ts[6].progression = 100; }
     if (ts[8]) { ts[8].statut = 'fait'; ts[8].faitLe = j2; ts[8].progression = 100; }
@@ -7591,6 +8274,9 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
     if (ts[10]) { ts[10].statut = 'encours'; ts[10].progression = 50; }
     if (ts[11]) {
       ts[11].statut = 'bloque';
+      ts[11].blocageOrigine = 'CLIENT';
+      ts[11].bloqueDepuis = j2;
+      ts[11].blocageDuree = '4h estimées';
       ts[11].blocage = 'Armoire générale 400V client consignée — attente intervention électricien site demain 08h30.';
       ts[11].commentaire = 'Câble tiré et prêt devant le sectionneur.';
     }
@@ -7869,13 +8555,21 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
         </button>
       </div>
       <div class="pilotage-prog-row">
-        <div class="prog-track"><div class="prog-fill" style="width:${bilan.pctGlobal}%"></div></div>
+        <div class="prog-track" title="Avancement ${bilan.pctGlobal}%${bilan.cadence && bilan.cadence.actif ? ' — Repère délai J' + bilan.numeroJour + '/' + bilan.nbJoursTotal + ' : ' + bilan.cadence.pctDelai + '%' : ''}">
+          <div class="prog-fill" style="width:${bilan.pctGlobal}%"></div>
+          ${(bilan.cadence && bilan.cadence.actif && bilan.cadence.pctDelai > 0 && bilan.cadence.pctDelai < 100)
+            ? `<div class="prog-target-tick" style="left:${bilan.cadence.pctDelai}%"></div>` : ''}
+        </div>
         <div class="prog-pct">${bilan.faitTotal.length}/${bilan.total} · ${bilan.pctGlobal}%</div>
       </div>
       <div class="pilotage-badges">
         <span class="mini-badge auj">✓ +${bilan.faitCeJour.length} ce jour</span>
+        ${(bilan.nbJoursTotal >= 2 && bilan.cadence)
+          ? `<span class="mini-badge cad-${esc(bilan.cadence.code)}">${bilan.cadence.code === 'ok' ? '🟢' : (bilan.cadence.code === 'derive' ? '🟠' : (bilan.cadence.code === 'retard' ? '🔴' : '⏳'))} ${esc(bilan.cadence.libelle)}${bilan.cadence.actif ? ' (' + bilan.pctGlobal + '% / J' + bilan.numeroJour + ' ' + bilan.cadence.pctDelai + '%)' : ''}</span>`
+          : ''}
         ${bilan.enCours.length ? `<span class="mini-badge encours">🔄 ${bilan.enCours.length} en cours</span>` : ''}
-        ${bilan.bloques.length ? `<span class="mini-badge bloque" data-filtre-rapide="bloque" style="cursor:pointer">🛑 ${bilan.bloques.length} bloqué${bilan.bloques.length > 1 ? 's' : ''}</span>` : ''}
+        ${bilan.bloques.length ? `<span class="mini-badge bloque" data-filtre-rapide="bloque" style="cursor:pointer">🛑 ${bilan.bloques.length} bloqué${bilan.bloques.length > 1 ? 's' : ''}${bilan.bloquesClient.length ? ' (' + bilan.bloquesClient.length + ' Client)' : ''}</span>` : ''}
+        ${bilan.blocagesLevesCeJour.length ? `<span class="mini-badge cad-ok">🔓 ${bilan.blocagesLevesCeJour.length} levé${bilan.blocagesLevesCeJour.length > 1 ? 's' : ''}</span>` : ''}
         ${bilan.jour.envoyeLe ? `<span class="mini-badge envoye">📤 Envoyé (${esc(bilan.jour.envoyeLe)})</span>` : ''}
       </div>`;
   }
@@ -7910,10 +8604,14 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
     }
 
     if (bilan.bloques.length > 0 && filtreStatut !== 'bloque') {
+      const precOrig = [];
+      if (bilan.bloquesClient.length) precOrig.push(bilan.bloquesClient.length + ' Attente Client');
+      if (bilan.bloquesBfr.length) precOrig.push(bilan.bloquesBfr.length + ' Interne BFR');
+      if (bilan.bloquesTiers.length) precOrig.push(bilan.bloquesTiers.length + ' Tiers');
       html += `<div class="alerte-blocages" data-filtre-rapide="bloque" title="Afficher les points bloquants">
         <div style="flex-shrink:0;margin-top:2px">${ICO.shieldAlert(20, 'ico-danger')}</div>
         <div style="flex:1;min-width:0">
-          <strong>${bilan.bloques.length} point${bilan.bloques.length > 1 ? 's' : ''} bloquant${bilan.bloques.length > 1 ? 's' : ''} / réserve${bilan.bloques.length > 1 ? 's' : ''} en cours</strong>
+          <strong>${bilan.bloques.length} point${bilan.bloques.length > 1 ? 's' : ''} bloquant${bilan.bloques.length > 1 ? 's' : ''} en cours${precOrig.length ? ' — ' + esc(precOrig.join(' · ')) : ''}</strong>
           <span>${esc(bilan.bloques[0].titre)}${bilan.bloques.length > 1 ? ' (+' + (bilan.bloques.length - 1) + ' autre' + (bilan.bloques.length > 2 ? 's' : '') + ')' : ''} — Appuyez pour filtrer</span>
         </div>
       </div>`;
@@ -8093,7 +8791,11 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
   function rendreLigneTache(t, dateJour) {
     const st = t.statut || 'afaire';
     const estFaitAuj = st === 'fait' && t.faitLe === dateJour;
-    const nbPhotos = (t.photos || []).filter(p => p && p.dataUrl).length;
+    const photosValides = (t.photos || []).filter(p => p && p.dataUrl);
+    const nbPhotosClient = photosValides.filter(p => p.visibilite !== 'interne').length;
+    const nbPhotosInterne = photosValides.filter(p => p.visibilite === 'interne').length;
+    const wPoids = Report.poidsTache(t);
+    const leveeCeJour = (t.historiqueBlocages || []).some(h => h && h.leveLe === dateJour);
     const noteApercu = st === 'bloque'
       ? (t.blocage || t.commentaire || '')
       : (t.commentaire || '');
@@ -8106,7 +8808,8 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
     } else if (st === 'encours') {
       badgeStatut = `<span class="tache-tag encours">En cours${t.progression ? ' · ' + t.progression + '%' : ''}</span>`;
     } else if (st === 'bloque') {
-      badgeStatut = `<span class="tache-tag bloque">🛑 Bloqué / Réserve</span>`;
+      const orig = Report.ORIGINES_BLOCAGE[t.blocageOrigine || 'CLIENT'] || Report.ORIGINES_BLOCAGE.CLIENT;
+      badgeStatut = `<span class="tache-tag bloque-client">🛑 ${esc(orig.libelle)}${t.blocageDuree ? ' · ' + esc(t.blocageDuree) : ''}</span>`;
     }
 
     const domLabel = Report.DOMAINES[t.domaine] || '';
@@ -8117,17 +8820,327 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       </button>
       <div class="tache-main" data-a="ouvrir-tache" data-id="${esc(t.id)}">
         <div class="tache-titre">${esc(t.titre)}</div>
-        ${(badgeStatut || domLabel || nbPhotos || (t.commentaire && st !== 'bloque')) ? `
         <div class="tache-meta">
           ${badgeStatut}
+          ${leveeCeJour && st !== 'bloque' ? `<span class="tache-tag leve">🔓 Blocage levé</span>` : ''}
+          ${wPoids > 1 ? `<span class="tache-tag poids">×${wPoids}</span>` : ''}
           ${domLabel ? `<span class="tache-tag">${ICO.domaine(t.domaine, 12)} ${esc(domLabel)}</span>` : ''}
-          ${nbPhotos ? `<span class="tache-tag">📷 ${nbPhotos}</span>` : ''}
+          ${nbPhotosClient ? `<span class="tache-tag">📷 ${nbPhotosClient}</span>` : ''}
+          ${nbPhotosInterne ? `<span class="tache-tag" style="background:#eef2ff;color:var(--bfr-secondary)">🔒 ${nbPhotosInterne} BFR</span>` : ''}
           ${(t.commentaire && st === 'bloque' && t.blocage) ? `<span class="tache-tag">💬 Note</span>` : ''}
-        </div>` : ''}
+        </div>
         ${noteApercu ? `<div class="tache-note-apercu">${esc(noteApercu)}</div>` : ''}
-        ${nbPhotos ? `<div class="tache-thumbs">${(t.photos || []).filter(p => p && p.dataUrl).slice(0, 4).map(p => `<img src="${p.dataUrl}" alt="Photo">`).join('')}</div>` : ''}
+        ${photosValides.length ? `<div class="tache-thumbs">${photosValides.slice(0, 4).map(p => `<img src="${p.dataUrl}" alt="Photo" style="${p.visibilite === 'interne' ? 'border:1.5px dashed var(--bfr-secondary);opacity:0.86' : ''}">`).join('')}</div>` : ''}
       </div>
     </div>`;
+  }
+
+  /* ===================== Composant Photos unifié (Client / Mémo BFR + Avant / Après) === */
+  function construireBlocPhotosHtml(photosBrutes, pfx, libelleTitre) {
+    const phs = (photosBrutes || []).map((p, idx) => ({ p: p, idx: idx })).filter(x => x.p && x.p.dataUrl);
+    const nbClient = phs.filter(x => x.p.visibilite !== 'interne').length;
+    const nbInterne = phs.filter(x => x.p.visibilite === 'interne').length;
+
+    // Identifier les duos Avant / Après liés par paireId (ou avant sans après en attente)
+    const consommes = new Set();
+    const cartes = [];
+
+    for (let k = 0; k < phs.length; k++) {
+      const cur = phs[k];
+      if (consommes.has(cur.idx)) continue;
+      if (cur.p.avantApres === 'avant') {
+        let part = null;
+        if (cur.p.paireId) {
+          part = phs.find(x => x.idx !== cur.idx && !consommes.has(x.idx) && x.p.avantApres === 'apres' && x.p.paireId === cur.p.paireId);
+        }
+        if (!part) {
+          part = phs.find(x => x.idx > cur.idx && !consommes.has(x.idx) && x.p.avantApres === 'apres' && !x.p.paireId);
+        }
+        consommes.add(cur.idx);
+        if (part) consommes.add(part.idx);
+        cartes.push({ type: 'duo', avant: cur, apres: part });
+      } else {
+        consommes.add(cur.idx);
+        cartes.push({ type: 'simple', item: cur });
+      }
+    }
+
+    const statsTxt = phs.length
+      ? `(${nbClient} PDF Client${nbInterne ? ' · ' + nbInterne + ' 🔒 Mémo BFR' : ''})`
+      : '(0)';
+
+    return `
+      <label>${esc(libelleTitre)} <span style="font-weight:500;color:var(--bfr-text-muted)">${statsTxt}</span></label>
+      <div class="btnrow" style="margin-bottom:8px">
+        <label class="btn sm ghost" style="cursor:pointer;margin:0">
+          <input type="file" accept="image/*" capture="environment" data-ph-add="${pfx}:cam" style="display:none">
+          ${ICO.camera(15)} Photo
+        </label>
+        <label class="btn sm grey" style="cursor:pointer;margin:0">
+          <input type="file" accept="image/*" multiple data-ph-add="${pfx}:gal" style="display:none">
+          ${ICO.image(15)} Galerie
+        </label>
+        <label class="btn sm ghost" style="cursor:pointer;margin:0;border-color:var(--bfr-secondary);color:var(--bfr-secondary)">
+          <input type="file" accept="image/*" data-ph-add="${pfx}:duo" style="display:none">
+          ⚖️ Avant / Après
+        </label>
+      </div>
+      ${cartes.length ? `<div class="ph-grid">
+        ${cartes.map(c => {
+          if (c.type === 'duo') {
+            const av = c.avant.p, idxAv = c.avant.idx;
+            const ap = c.apres ? c.apres.p : null;
+            const idxAp = c.apres ? c.apres.idx : -1;
+            const estInt = av.visibilite === 'interne';
+            const pid = av.paireId || ('duo_' + idxAv);
+            return `<div class="ph-duo-card ${estInt ? 'interne' : ''}">
+              <div class="ph-duo-hdr">
+                <span>⚖️ Comparatif Avant / Après</span>
+                <div style="display:flex;gap:5px;align-items:center">
+                  <button type="button" class="ph-vis-btn ${estInt ? 'interne' : 'client'}" style="position:static" data-ph-vis="${pfx}:${idxAv}" title="Basculer Rapport Client / Mémo interne BFR">
+                    ${estInt ? '🔒 Mémo BFR' : '📄 PDF Client'}
+                  </button>
+                  <button type="button" class="btn sm grey" data-ph-dissocier="${pfx}:${idxAv}" style="min-height:22px;padding:1px 6px;font-size:10px" title="Repasser en photo simple">✕ Duo</button>
+                </div>
+              </div>
+              <div class="ph-duo-cols">
+                <div class="ph-duo-slot">
+                  <div class="ph-duo-tag avant">◀ AVANT</div>
+                  <div class="ph-img-wrap" style="height:92px">
+                    <img src="${av.dataUrl}" alt="Avant" data-ph-annot="${pfx}:${idxAv}">
+                  </div>
+                  <div style="padding:4px;display:flex;gap:4px">
+                    <button type="button" class="btn sm ghost" data-ph-annot="${pfx}:${idxAv}" style="min-height:24px;padding:1px 5px;font-size:10.5px;flex:1">${ICO.pen(11)} Annoter</button>
+                    <button type="button" class="btn sm danger" data-ph-del="${pfx}:${idxAv}" style="min-height:24px;padding:1px 6px;font-size:10.5px">${ICO.trash(11)}</button>
+                  </div>
+                </div>
+                <div class="ph-duo-slot">
+                  <div class="ph-duo-tag apres">APRÈS ▶</div>
+                  ${ap ? `
+                    <div class="ph-img-wrap" style="height:92px">
+                      <img src="${ap.dataUrl}" alt="Après" data-ph-annot="${pfx}:${idxAp}">
+                    </div>
+                    <div style="padding:4px;display:flex;gap:4px">
+                      <button type="button" class="btn sm ghost" data-ph-annot="${pfx}:${idxAp}" style="min-height:24px;padding:1px 5px;font-size:10.5px;flex:1">${ICO.pen(11)} Annoter</button>
+                      <button type="button" class="btn sm danger" data-ph-del="${pfx}:${idxAp}" style="min-height:24px;padding:1px 6px;font-size:10.5px">${ICO.trash(11)}</button>
+                    </div>
+                  ` : `
+                    <label class="ph-duo-vide" style="margin:0">
+                      <input type="file" accept="image/*" data-ph-apres="${pfx}:${idxAv}:${esc(pid)}" style="display:none">
+                      ${ICO.camera(18)}
+                      <span>+ Photo APRÈS</span>
+                    </label>
+                  `}
+                </div>
+              </div>
+              <input type="text" data-ph-leg="${pfx}:${idxAv}" value="${esc(av.legende || (ap && ap.legende) || '')}" placeholder="Légende commune Avant / Après…" style="margin-top:6px;font-size:11.5px;padding:5px 7px;border:1px solid var(--bfr-border);border-radius:5px;width:100%;background:#fff">
+            </div>`;
+          }
+
+          const ph = c.item.p, idx = c.item.idx;
+          const estInt = ph.visibilite === 'interne';
+          const aa = ph.avantApres || '';
+          const aaTxt = aa === 'avant' ? '◀ AVANT' : (aa === 'apres' ? 'APRÈS ▶' : 'Avant/Après');
+          return `<div class="ph-card ${estInt ? 'interne' : ''}">
+            <div class="ph-img-wrap">
+              <img src="${ph.dataUrl}" alt="Photo" data-ph-annot="${pfx}:${idx}" title="Appuyer pour annoter au doigt">
+              <button type="button" class="ph-vis-btn ${estInt ? 'interne' : 'client'}" data-ph-vis="${pfx}:${idx}" title="Basculer Rapport Client / Mémo interne BFR">
+                ${estInt ? '🔒 Mémo BFR' : '📄 PDF Client'}
+              </button>
+              <button type="button" class="ph-aa-btn ${esc(aa)}" data-ph-aa="${pfx}:${idx}" title="Marquer en Avant / Après">${aaTxt}</button>
+            </div>
+            <div style="padding:5px 6px;display:flex;flex-direction:column;gap:4px">
+              <input type="text" data-ph-leg="${pfx}:${idx}" value="${esc(ph.legende || '')}" placeholder="${estInt ? 'Note mémo interne BFR…' : 'Légende rapport…'}" style="font-size:11.5px;padding:4px 6px;border:1px solid var(--bfr-border);border-radius:4px;width:100%">
+              <div style="display:flex;gap:4px">
+                <button type="button" class="btn sm ghost" data-ph-annot="${pfx}:${idx}" style="min-height:25px;padding:2px 5px;font-size:11px;flex:1">${ICO.pen(11)} Annoter</button>
+                <button type="button" class="btn sm danger" data-ph-del="${pfx}:${idx}" style="min-height:25px;padding:2px 6px;font-size:11px">${ICO.trash(11)}</button>
+              </div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>` : ''}`;
+  }
+
+  function brancherBlocPhotos(conteneur, getListePhotos, pfx, rafraichir, avantModif) {
+    // Saisie légendes
+    $$(`[data-ph-leg^="${pfx}:"]`, conteneur).forEach(inp => {
+      inp.addEventListener('input', () => {
+        const idx = Number(inp.dataset.phLeg.split(':')[1]);
+        const arr = getListePhotos();
+        const ph = arr && arr[idx];
+        if (!ph) return;
+        ph.legende = inp.value;
+        if (ph.paireId) {
+          arr.forEach(x => { if (x && x !== ph && x.paireId === ph.paireId) x.legende = inp.value; });
+        }
+        planifierSauvegarde();
+      });
+    });
+
+    // Ajout photos (Caméra, Galerie ou Duo Avant/Après)
+    $$(`[data-ph-add^="${pfx}:"]`, conteneur).forEach(inp => {
+      inp.addEventListener('change', async () => {
+        const mode = inp.dataset.phAdd.split(':')[1];
+        const files = Array.from(inp.files || []);
+        if (!files.length) return;
+        if (avantModif) avantModif();
+        const arr = getListePhotos();
+        const paireId = mode === 'duo' ? uid('duo') : '';
+        for (let i = 0; i < files.length; i++) {
+          try {
+            const dataUrl = await compresserImage(files[i], 1500, 0.85);
+            const roleAA = mode === 'duo' ? (i === 0 ? 'avant' : (i === 1 ? 'apres' : '')) : '';
+            const ph = {
+              id: uid(pfx === 'jour' ? 'phj' : 'pht'),
+              dataUrl: dataUrl,
+              legende: '',
+              visibilite: 'client',
+              avantApres: roleAA,
+              paireId: roleAA ? paireId : '',
+              datePrise: C.jourActif || aujourdhuiISO(),
+              annotations: []
+            };
+            arr.push(ph);
+            if (files.length === 1 && typeof Annotation !== 'undefined') {
+              Annotation.ouvrir(ph, { fin: () => { planifierSauvegarde(); rafraichir(); } });
+              return;
+            }
+          } catch (_) { toast('Impossible de charger cette image'); }
+        }
+        planifierSauvegarde();
+        rafraichir();
+      });
+    });
+
+    // Ajout de la photo APRÈS directement sur une carte Duo en attente
+    $$(`[data-ph-apres^="${pfx}:"]`, conteneur).forEach(inp => {
+      inp.addEventListener('change', async () => {
+        const f = inp.files && inp.files[0];
+        if (!f) return;
+        if (avantModif) avantModif();
+        const parts = inp.dataset.phApres.split(':');
+        const idxAv = Number(parts[1]);
+        const arr = getListePhotos();
+        const av = arr && arr[idxAv];
+        const pid = (av && av.paireId) || parts[2] || uid('duo');
+        if (av) av.paireId = pid;
+        try {
+          const dataUrl = await compresserImage(f, 1500, 0.85);
+          const phAp = {
+            id: uid(pfx === 'jour' ? 'phj' : 'pht'),
+            dataUrl: dataUrl,
+            legende: (av && av.legende) || '',
+            visibilite: (av && av.visibilite) || 'client',
+            avantApres: 'apres',
+            paireId: pid,
+            datePrise: C.jourActif || aujourdhuiISO(),
+            annotations: []
+          };
+          arr.push(phAp);
+          if (typeof Annotation !== 'undefined') {
+            Annotation.ouvrir(phAp, { fin: () => { planifierSauvegarde(); rafraichir(); } });
+            return;
+          }
+        } catch (_) { toast('Image illisible'); }
+        planifierSauvegarde();
+        rafraichir();
+      });
+    });
+  }
+
+  function gererClicActionPhoto(e, getListePhotos, pfx, rafraichir, avantModif) {
+    const bVis = e.target.closest(`[data-ph-vis^="${pfx}:"]`);
+    if (bVis) {
+      if (avantModif) avantModif();
+      const idx = Number(bVis.dataset.phVis.split(':')[1]);
+      const arr = getListePhotos();
+      const ph = arr && arr[idx];
+      if (ph) {
+        const nv = ph.visibilite === 'interne' ? 'client' : 'interne';
+        ph.visibilite = nv;
+        if (ph.paireId) arr.forEach(x => { if (x && x.paireId === ph.paireId) x.visibilite = nv; });
+        planifierSauvegarde();
+        rafraichir();
+        toast(nv === 'interne' ? '🔒 Classée en Mémo interne BFR (non imprimée au rapport client)' : '📄 Incluse dans le rapport PDF Client');
+      }
+      return true;
+    }
+
+    const bAA = e.target.closest(`[data-ph-aa^="${pfx}:"]`);
+    if (bAA) {
+      if (avantModif) avantModif();
+      const idx = Number(bAA.dataset.phAa.split(':')[1]);
+      const arr = getListePhotos();
+      const ph = arr && arr[idx];
+      if (ph) {
+        if (!ph.avantApres) {
+          // Chercher s'il existe une photo AVANT seule en attente d'une photo APRÈS
+          const avAttente = arr.find((x, k) => k !== idx && x && x.avantApres === 'avant' && (!x.paireId || !arr.some(y => y !== x && y.avantApres === 'apres' && y.paireId === x.paireId)));
+          if (avAttente) {
+            const pid = avAttente.paireId || uid('duo');
+            avAttente.paireId = pid;
+            ph.avantApres = 'apres';
+            ph.paireId = pid;
+            ph.visibilite = avAttente.visibilite || 'client';
+            toast('⚖️ Associée en photo APRÈS du comparatif');
+          } else {
+            ph.avantApres = 'avant';
+            ph.paireId = uid('duo');
+            toast('◀ Marquée AVANT — ajoutez maintenant la photo APRÈS');
+          }
+        } else {
+          ph.avantApres = '';
+          ph.paireId = '';
+        }
+        planifierSauvegarde();
+        rafraichir();
+      }
+      return true;
+    }
+
+    const bDis = e.target.closest(`[data-ph-dissocier^="${pfx}:"]`);
+    if (bDis) {
+      if (avantModif) avantModif();
+      const idx = Number(bDis.dataset.phDissocier.split(':')[1]);
+      const arr = getListePhotos();
+      const ph = arr && arr[idx];
+      if (ph) {
+        const pid = ph.paireId;
+        ph.avantApres = '';
+        ph.paireId = '';
+        if (pid) arr.forEach(x => { if (x && x.paireId === pid) { x.avantApres = ''; x.paireId = ''; } });
+        planifierSauvegarde();
+        rafraichir();
+      }
+      return true;
+    }
+
+    const bAnn = e.target.closest(`[data-ph-annot^="${pfx}:"]`);
+    if (bAnn) {
+      if (avantModif) avantModif();
+      const idx = Number(bAnn.dataset.phAnnot.split(':')[1]);
+      const arr = getListePhotos();
+      const ph = arr && arr[idx];
+      if (ph && typeof Annotation !== 'undefined') {
+        Annotation.ouvrir(ph, { fin: () => { planifierSauvegarde(); rafraichir(); } });
+      }
+      return true;
+    }
+
+    const bDel = e.target.closest(`[data-ph-del^="${pfx}:"]`);
+    if (bDel) {
+      if (avantModif) avantModif();
+      const idx = Number(bDel.dataset.phDel.split(':')[1]);
+      const arr = getListePhotos();
+      if (arr && arr[idx]) {
+        arr.splice(idx, 1);
+        planifierSauvegarde();
+        rafraichir();
+      }
+      return true;
+    }
+
+    return false;
   }
 
   function rendreJournal(bilan) {
@@ -8181,30 +9194,7 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       </div>
 
       <div class="field" style="margin-bottom:0">
-        <label>Photos d'avancement du jour (${photosJ.length})</label>
-        <div class="btnrow" style="margin-bottom:8px">
-          <label class="btn sm ghost" style="cursor:pointer;margin:0">
-            <input type="file" accept="image/*" capture="environment" data-photo-jour="camera" style="display:none">
-            ${ICO.camera(16)} Prendre photo
-          </label>
-          <label class="btn sm grey" style="cursor:pointer;margin:0">
-            <input type="file" accept="image/*" multiple data-photo-jour="galerie" style="display:none">
-            ${ICO.image(16)} Galerie
-          </label>
-        </div>
-        ${photosJ.length ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px">
-          ${photosJ.map((ph, idx) => `
-            <div style="border:1px solid var(--bfr-border);border-radius:8px;overflow:hidden;background:#fff">
-              <img src="${ph.dataUrl}" alt="Photo jour" data-a="annoter-photo-jour" data-idx="${idx}" style="width:100%;height:96px;object-fit:cover;display:block;cursor:pointer" title="Appuyer pour annoter au doigt">
-              <div style="padding:5px 6px;display:flex;flex-direction:column;gap:4px">
-                <input type="text" data-legende-jour="${idx}" value="${esc(ph.legende || '')}" placeholder="Légende…" style="font-size:11.5px;padding:4px 6px;border:1px solid var(--bfr-border);border-radius:4px;width:100%">
-                <div style="display:flex;justify-content:space-between;gap:4px">
-                  <button type="button" class="btn sm ghost" data-a="annoter-photo-jour" data-idx="${idx}" style="min-height:26px;padding:2px 6px;font-size:11px;flex:1">${ICO.pen(12)} Annoter</button>
-                  <button type="button" class="btn sm danger" data-a="suppr-photo-jour" data-idx="${idx}" style="min-height:26px;padding:2px 6px;font-size:11px">${ICO.trash(12)}</button>
-                </div>
-              </div>
-            </div>`).join('')}
-        </div>` : ''}
+        ${construireBlocPhotosHtml(j.photos || [], 'jour', 'Photos d\'avancement du jour')}
       </div>
     </div>`;
 
@@ -8216,36 +9206,13 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
         planifierSauvegarde();
       });
     });
-    $$('[data-legende-jour]', el).forEach(inp => {
-      inp.addEventListener('input', () => {
-        const jour = assurerJour(C.jourActif);
-        const idx = Number(inp.dataset.legendeJour);
-        if (jour.photos && jour.photos[idx]) {
-          jour.photos[idx].legende = inp.value;
-          planifierSauvegarde();
-        }
-      });
-    });
-    $$('[data-photo-jour]', el).forEach(inp => {
-      inp.addEventListener('change', async () => {
-        const files = Array.from(inp.files || []);
-        if (!files.length) return;
-        const jour = assurerJour(C.jourActif);
-        jour.photos = jour.photos || [];
-        for (const f of files) {
-          try {
-            const dataUrl = await compresserImage(f, 1500, 0.85);
-            const ph = { id: uid('phj'), dataUrl: dataUrl, legende: '', annotations: [] };
-            jour.photos.push(ph);
-            if (files.length === 1 && typeof Annotation !== 'undefined') {
-              Annotation.ouvrir(ph, { fin: () => { planifierSauvegarde(); rendreTout(); } });
-            }
-          } catch (_) { toast('Impossible de charger cette image'); }
-        }
-        planifierSauvegarde();
-        rendreTout();
-      });
-    });
+
+    brancherBlocPhotos(
+      el,
+      () => { const jour = assurerJour(C.jourActif); jour.photos = jour.photos || []; return jour.photos; },
+      'jour',
+      () => rendreTout()
+    );
   }
 
   function rendreCloture(bilan) {
@@ -8264,9 +9231,10 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       </div>
       <p class="hint">
         Rapport PDF officiel <strong>BFR Systems</strong> du <strong>${esc(Report.frDate(bilan.dateJour))}</strong> (sans signature client quotidienne) :
-        avancement global <strong>${bilan.pctGlobal} %</strong>, <strong>${bilan.faitCeJour.length}</strong> tâche${bilan.faitCeJour.length > 1 ? 's' : ''} du jour,
-        <strong>${bilan.bloques.length}</strong> point${bilan.bloques.length > 1 ? 's' : ''} bloquant${bilan.bloques.length > 1 ? 's' : ''},
-        <strong>${bilan.nbPhotosJour}</strong> photo${bilan.nbPhotosJour > 1 ? 's' : ''}.
+        avancement global <strong>${bilan.pctGlobal} %</strong>${bilan.nbJoursTotal >= 2 && bilan.cadence ? ` (${esc(bilan.cadence.libelle)})` : ''},
+        <strong>${bilan.faitCeJour.length}</strong> tâche${bilan.faitCeJour.length > 1 ? 's' : ''} du jour,
+        <strong>${bilan.bloques.length}</strong> blocage${bilan.bloques.length > 1 ? 's' : ''}${bilan.blocagesLevesCeJour.length ? ` (+${bilan.blocagesLevesCeJour.length} levé${bilan.blocagesLevesCeJour.length > 1 ? 's' : ''})` : ''},
+        <strong>${bilan.nbPhotosJour}</strong> photo${bilan.nbPhotosJour > 1 ? 's' : ''} client${bilan.nbPhotosInterne ? ` (<em>${bilan.nbPhotosInterne} mémo BFR masquée${bilan.nbPhotosInterne > 1 ? 's' : ''}</em>)` : ''}.
       </p>
 
       <button type="button" class="btn or wide" id="btnSoumettre" data-a="soumettre">
@@ -8302,7 +9270,35 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
     rendreCloture(bilan);
   }
 
-  /* ===================== Actions Tâches =============================== */
+  /* ===================== Actions Tâches & Traçabilité Blocages ======== */
+  function archiverLeveeBlocage(t, noteLevee) {
+    if (!t || t.statut !== 'bloque') return;
+    t.historiqueBlocages = t.historiqueBlocages || [];
+    const deb = t.bloqueDepuis || C.jourActif || aujourdhuiISO();
+    const fin = C.jourActif || aujourdhuiISO();
+    let duree = (t.blocageDuree || '').trim();
+    if (!duree && deb && fin && fin > deb) {
+      const m1 = /^(\d{4})-(\d{2})-(\d{2})$/.exec(deb);
+      const m2 = /^(\d{4})-(\d{2})-(\d{2})$/.exec(fin);
+      if (m1 && m2) {
+        const nbJ = Math.max(1, Math.round((new Date(+m2[1], +m2[2] - 1, +m2[3]) - new Date(+m1[1], +m1[2] - 1, +m1[3])) / 86400000));
+        duree = nbJ + ' j.';
+      }
+    }
+    t.historiqueBlocages.push({
+      id: uid('blq'),
+      origine: t.blocageOrigine || 'CLIENT',
+      motif: (t.blocage || '').trim() || 'Point bloquant',
+      debutLe: deb,
+      leveLe: fin,
+      duree: duree,
+      noteLevee: (noteLevee || '').trim()
+    });
+    t.blocage = '';
+    t.bloqueDepuis = '';
+    t.blocageDuree = '';
+  }
+
   function cocherDecocherTache(id) {
     const t = (C.taches || []).find(x => x.id === id);
     if (!t) return;
@@ -8312,11 +9308,13 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       t.progression = 0;
       toast('Tâche remise « À faire »');
     } else {
+      const etaitBloquee = t.statut === 'bloque';
+      if (etaitBloquee) archiverLeveeBlocage(t, 'Tâche réalisée');
       t.statut = 'fait';
       t.faitLe = C.jourActif || aujourdhuiISO();
       t.progression = 100;
       const b = Report.calculerBilan(C, C.jourActif);
-      toast('✓ Pointée Fait (Jour ' + b.numeroJour + ' · ' + b.pctGlobal + ' %)');
+      toast((etaitBloquee ? '🔓 Blocage levé & Fait' : '✓ Pointée Fait') + ' (Jour ' + b.numeroJour + ' · ' + b.pctGlobal + ' %)');
     }
     planifierSauvegarde();
     rendreTout();
@@ -8333,20 +9331,38 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
           phaseId: phaseParDefaut || phases[0].id,
           titre: '',
           domaine: '',
+          poids: 1,
           statut: 'afaire',
           progression: 0,
           faitLe: '',
           commentaire: '',
           blocage: '',
+          blocageOrigine: 'CLIENT',
+          bloqueDepuis: '',
+          blocageDuree: '',
+          historiqueBlocages: [],
           photos: []
         }
       : (C.taches || []).find(x => x.id === tacheId);
 
     if (!t) return;
 
+    function synchroniserChamps(panneau) {
+      const elTitre = $('#tcTitre', panneau); if (elTitre) t.titre = elTitre.value;
+      const elPh = $('#tcPhase', panneau); if (elPh) t.phaseId = elPh.value;
+      const elDom = $('#tcDomaine', panneau); if (elDom) t.domaine = elDom.value;
+      const elComm = $('#tcComm', panneau); if (elComm) t.commentaire = elComm.value;
+      const elBloc = $('#tcBlocage', panneau); if (elBloc) t.blocage = elBloc.value;
+      const elDep = $('#tcBloqueDepuis', panneau); if (elDep) t.bloqueDepuis = elDep.value;
+      const elDur = $('#tcBlocageDuree', panneau); if (elDur) t.blocageDuree = elDur.value;
+      const elFaitLe = $('#tcFaitLe', panneau); if (elFaitLe) t.faitLe = elFaitLe.value;
+    }
+
     function construireContenu(panneau) {
       const st = t.statut || 'afaire';
-      const phs = (t.photos || []).filter(p => p && p.dataUrl);
+      const wPoids = Report.poidsTache(t);
+      const orig = t.blocageOrigine || 'CLIENT';
+      const hist = Array.isArray(t.historiqueBlocages) ? t.historiqueBlocages : [];
 
       panneau.innerHTML = `
         <div class="grab"></div>
@@ -8378,6 +9394,15 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
           </div>
         </div>
 
+        <div class="field">
+          <label>Pondération / Charge dans l'avancement global</label>
+          <div class="poids-grid">
+            <button type="button" class="poids-opt ${wPoids === 1 ? 'on' : ''}" data-poids="1">×1 Standard</button>
+            <button type="button" class="poids-opt ${wPoids === 2 ? 'on' : ''}" data-poids="2">×2 Moyen</button>
+            <button type="button" class="poids-opt ${wPoids === 3 ? 'on' : ''}" data-poids="3">×3 Gros poste</button>
+          </div>
+        </div>
+
         <label style="display:block;font-family:var(--font-heading);font-size:12.5px;font-weight:600;color:var(--bfr-secondary);margin-top:4px">Statut d'avancement</label>
         <div class="statut-grid">
           <button type="button" class="statut-opt ${st === 'afaire' ? 'on-afaire' : ''}" data-st="afaire">⬜ À faire</button>
@@ -8402,11 +9427,50 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
 
         ${st === 'bloque' ? `
         <div class="field" style="background:var(--def-bg);padding:10px;border-radius:8px;border:1.5px solid var(--def-border)">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-            <label style="color:#991b1b;margin:0">🛑 Motif du blocage / Action attendue *</label>
-            <button type="button" class="btn sm grey btn-dictee" data-dictee-tc="tcBlocage" style="min-height:28px;padding:2px 8px;font-size:11px">${ICO.mic(13)} Dicter</button>
+          <label style="color:#991b1b;margin:0">🛑 Imputation du point bloquant</label>
+          <div class="orig-grid">
+            <button type="button" class="orig-opt ${orig === 'CLIENT' ? 'on' : ''}" data-orig="CLIENT">🏢 Attente Client</button>
+            <button type="button" class="orig-opt ${orig === 'BFR' ? 'on' : ''}" data-orig="BFR">🔧 Interne BFR</button>
+            <button type="button" class="orig-opt ${orig === 'TIERS' ? 'on' : ''}" data-orig="TIERS">🚚 Tiers / Fourn.</button>
           </div>
-          <textarea id="tcBlocage" rows="2" placeholder="Ex. Attente alimentation 400V client, pièce manquante, réserve…">${esc(t.blocage || '')}</textarea>
+
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <label style="color:#991b1b;margin:0">Motif du blocage / Action attendue *</label>
+            <button type="button" class="btn sm grey btn-dictee" data-dictee-tc="tcBlocage" style="min-height:26px;padding:2px 8px;font-size:11px">${ICO.mic(13)} Dicter</button>
+          </div>
+          <textarea id="tcBlocage" rows="2" placeholder="Ex. Attente alimentation 400V client, zone consignée, pièce manquante…">${esc(t.blocage || '')}</textarea>
+
+          <div class="grid2" style="margin-top:8px">
+            <div class="field" style="margin:0">
+              <label style="color:#991b1b;font-size:11.5px">Bloqué depuis le</label>
+              <input type="date" id="tcBloqueDepuis" value="${esc(t.bloqueDepuis || C.jourActif || aujourdhuiISO())}" style="background:#fff">
+            </div>
+            <div class="field" style="margin:0">
+              <label style="color:#991b1b;font-size:11.5px">Durée d'attente / impact</label>
+              <input type="text" id="tcBlocageDuree" value="${esc(t.blocageDuree || '')}" placeholder="Ex. 3h, 0,5 j, 1 jour…" style="background:#fff">
+            </div>
+          </div>
+
+          <button type="button" class="btn sm wide" data-act="lever-blocage" style="margin-top:10px;background:var(--ok);border-color:var(--ok);color:#fff">
+            🔓 Lever ce point bloquant (conserver la trace)
+          </button>
+        </div>` : ''}
+
+        ${hist.length ? `
+        <div class="field">
+          <label>🔓 Historique des blocages levés (${hist.length})</label>
+          <div class="hist-bloq-liste">
+            ${hist.map((h, hi) => {
+              const oInfo = Report.ORIGINES_BLOCAGE[h.origine || 'CLIENT'] || Report.ORIGINES_BLOCAGE.CLIENT;
+              return `<div class="hist-bloq-item">
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
+                  <strong style="color:var(--bfr-secondary)">[${esc(oInfo.libelle)}] Bloqué le ${esc(Report.frDateCourte(h.debutLe))} → Levé le ${esc(Report.frDateCourte(h.leveLe))}${h.duree ? ' (' + esc(h.duree) + ')' : ''}</strong>
+                  <button type="button" class="btn sm danger" data-suppr-hist="${hi}" style="min-height:22px;padding:1px 6px;font-size:10px" title="Supprimer cette trace">✕</button>
+                </div>
+                <div style="color:var(--bfr-text-muted)">${esc(h.motif)}${h.noteLevee ? ' — <em>' + esc(h.noteLevee) + '</em>' : ''}</div>
+              </div>`;
+            }).join('')}
+          </div>
         </div>` : ''}
 
         <div class="field">
@@ -8418,30 +9482,7 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
         </div>
 
         <div class="field">
-          <label>Photos sur cette tâche (${phs.length}) — annotables au doigt</label>
-          <div class="btnrow" style="margin-bottom:8px">
-            <label class="btn sm ghost" style="cursor:pointer;margin:0">
-              <input type="file" accept="image/*" capture="environment" id="tcPhotoCam" style="display:none">
-              ${ICO.camera(16)} Appareil photo
-            </label>
-            <label class="btn sm grey" style="cursor:pointer;margin:0">
-              <input type="file" accept="image/*" multiple id="tcPhotoGal" style="display:none">
-              ${ICO.image(16)} Galerie
-            </label>
-          </div>
-          ${phs.length ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(125px,1fr));gap:8px">
-            ${phs.map((ph, idx) => `
-              <div style="border:1px solid var(--bfr-border);border-radius:8px;overflow:hidden;background:#fff">
-                <img src="${ph.dataUrl}" alt="Photo tâche" data-act="annoter-tc-photo" data-idx="${idx}" style="width:100%;height:88px;object-fit:cover;display:block;cursor:pointer">
-                <div style="padding:5px">
-                  <input type="text" data-tc-leg="${idx}" value="${esc(ph.legende || '')}" placeholder="Légende…" style="font-size:11px;padding:4px 6px;border:1px solid var(--bfr-border);border-radius:4px;width:100%;margin-bottom:4px">
-                  <div style="display:flex;gap:4px">
-                    <button type="button" class="btn sm ghost" data-act="annoter-tc-photo" data-idx="${idx}" style="min-height:25px;padding:2px 5px;font-size:11px;flex:1">${ICO.pen(11)} Annoter</button>
-                    <button type="button" class="btn sm danger" data-act="suppr-tc-photo" data-idx="${idx}" style="min-height:25px;padding:2px 6px;font-size:11px">${ICO.trash(11)}</button>
-                  </div>
-                </div>
-              </div>`).join('')}
-          </div>` : ''}
+          ${construireBlocPhotosHtml(t.photos || [], 'tc', 'Photos sur cette tâche')}
         </div>
 
         <div class="btnrow" style="margin-top:12px">
@@ -8449,46 +9490,13 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
           <button type="button" class="btn principal" data-act="enregistrer-tache">${ICO.check(17)} ${estNouvelle ? 'Ajouter la tâche' : 'Enregistrer'}</button>
         </div>`;
 
-      const synchroniserChamps = () => {
-        const elTitre = $('#tcTitre', panneau);
-        if (elTitre) t.titre = elTitre.value;
-        const elPh = $('#tcPhase', panneau);
-        if (elPh) t.phaseId = elPh.value;
-        const elDom = $('#tcDomaine', panneau);
-        if (elDom) t.domaine = elDom.value;
-        const elComm = $('#tcComm', panneau);
-        if (elComm) t.commentaire = elComm.value;
-        const elBloc = $('#tcBlocage', panneau);
-        if (elBloc) t.blocage = elBloc.value;
-        const elFaitLe = $('#tcFaitLe', panneau);
-        if (elFaitLe) t.faitLe = elFaitLe.value;
-        $$('[data-tc-leg]', panneau).forEach(inp => {
-          const i = Number(inp.dataset.tcLeg);
-          if (t.photos && t.photos[i]) t.photos[i].legende = inp.value;
-        });
-      };
-
-      const gererAjoutPhotos = async (files) => {
-        synchroniserChamps();
-        for (const f of files) {
-          try {
-            const dataUrl = await compresserImage(f, 1500, 0.85);
-            const ph = { id: uid('pht'), dataUrl: dataUrl, legende: '', annotations: [] };
-            t.photos = t.photos || [];
-            t.photos.push(ph);
-            if (files.length === 1 && typeof Annotation !== 'undefined') {
-              Annotation.ouvrir(ph, { fin: () => construireContenu(panneau) });
-              return;
-            }
-          } catch (_) { toast('Image illisible'); }
-        }
-        construireContenu(panneau);
-      };
-
-      const cam = $('#tcPhotoCam', panneau);
-      const gal = $('#tcPhotoGal', panneau);
-      if (cam) cam.addEventListener('change', () => gererAjoutPhotos(Array.from(cam.files || [])));
-      if (gal) gal.addEventListener('change', () => gererAjoutPhotos(Array.from(gal.files || [])));
+      brancherBlocPhotos(
+        panneau,
+        () => { t.photos = t.photos || []; return t.photos; },
+        'tc',
+        () => construireContenu(panneau),
+        () => synchroniserChamps(panneau)
+      );
 
       if (estNouvelle && !t.titre) {
         setTimeout(() => { const el = $('#tcTitre', panneau); if (el) el.focus(); }, 60);
@@ -8499,29 +9507,53 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       construireContenu(panneau);
 
       panneau.addEventListener('click', async (e) => {
-        const sync = () => {
-          const elTitre = $('#tcTitre', panneau); if (elTitre) t.titre = elTitre.value;
-          const elPh = $('#tcPhase', panneau); if (elPh) t.phaseId = elPh.value;
-          const elDom = $('#tcDomaine', panneau); if (elDom) t.domaine = elDom.value;
-          const elComm = $('#tcComm', panneau); if (elComm) t.commentaire = elComm.value;
-          const elBloc = $('#tcBlocage', panneau); if (elBloc) t.blocage = elBloc.value;
-          const elFaitLe = $('#tcFaitLe', panneau); if (elFaitLe) t.faitLe = elFaitLe.value;
-          $$('[data-tc-leg]', panneau).forEach(inp => {
-            const i = Number(inp.dataset.tcLeg);
-            if (t.photos && t.photos[i]) t.photos[i].legende = inp.value;
-          });
-        };
+        if (gererClicActionPhoto(e, () => { t.photos = t.photos || []; return t.photos; }, 'tc', () => construireContenu(panneau), () => synchroniserChamps(panneau))) {
+          return;
+        }
+
+        const btnPoids = e.target.closest('[data-poids]');
+        if (btnPoids) {
+          synchroniserChamps(panneau);
+          t.poids = Number(btnPoids.dataset.poids) || 1;
+          construireContenu(panneau);
+          return;
+        }
+
+        const btnOrig = e.target.closest('[data-orig]');
+        if (btnOrig) {
+          synchroniserChamps(panneau);
+          t.blocageOrigine = btnOrig.dataset.orig || 'CLIENT';
+          construireContenu(panneau);
+          return;
+        }
+
+        const btnSupHist = e.target.closest('[data-suppr-hist]');
+        if (btnSupHist) {
+          synchroniserChamps(panneau);
+          const hi = Number(btnSupHist.dataset.supprHist);
+          if (t.historiqueBlocages) t.historiqueBlocages.splice(hi, 1);
+          construireContenu(panneau);
+          return;
+        }
 
         const btnSt = e.target.closest('[data-st]');
         if (btnSt) {
-          sync();
+          synchroniserChamps(panneau);
           const nv = btnSt.dataset.st;
+          if (t.statut === 'bloque' && nv !== 'bloque' && (t.blocage || t.bloqueDepuis)) {
+            archiverLeveeBlocage(t, nv === 'fait' ? 'Tâche réalisée' : 'Reprise des travaux');
+            toast('🔓 Trace du blocage conservée dans l\'historique');
+          }
           t.statut = nv;
           if (nv === 'fait') {
             if (!t.faitLe) t.faitLe = C.jourActif || aujourdhuiISO();
             t.progression = 100;
           } else if (nv === 'encours') {
             if (!t.progression || t.progression === 100) t.progression = 50;
+          } else if (nv === 'bloque') {
+            if (!t.blocageOrigine) t.blocageOrigine = 'CLIENT';
+            if (!t.bloqueDepuis) t.bloqueDepuis = C.jourActif || aujourdhuiISO();
+            t.progression = 0;
           } else {
             t.progression = 0;
           }
@@ -8531,7 +9563,7 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
 
         const btnProg = e.target.closest('[data-prog]');
         if (btnProg) {
-          sync();
+          synchroniserChamps(panneau);
           t.progression = Number(btnProg.dataset.prog);
           construireContenu(panneau);
           return;
@@ -8548,18 +9580,19 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
         if (!act) return;
         const nomAct = act.dataset.act;
 
-        if (nomAct === 'annoter-tc-photo') {
-          sync();
-          const idx = Number(act.dataset.idx);
-          const ph = t.photos && t.photos[idx];
-          if (ph && typeof Annotation !== 'undefined') {
-            Annotation.ouvrir(ph, { fin: () => construireContenu(panneau) });
-          }
-        } else if (nomAct === 'suppr-tc-photo') {
-          sync();
-          const idx = Number(act.dataset.idx);
-          if (t.photos) t.photos.splice(idx, 1);
+        if (nomAct === 'lever-blocage') {
+          synchroniserChamps(panneau);
+          const noteRes = await Dialogue.saisir(
+            'Précision éventuelle sur la levée du blocage (facultatif) :',
+            '',
+            'Ex. Alimentation 400V rétablie par le client à 10h30'
+          );
+          if (noteRes === null) return;
+          archiverLeveeBlocage(t, noteRes);
+          t.statut = 'encours';
+          if (!t.progression) t.progression = 50;
           construireContenu(panneau);
+          toast('🔓 Point bloquant levé et archivé');
         } else if (nomAct === 'supprimer-tache') {
           if (await Dialogue.confirmer('Supprimer définitivement cette tâche de la liste ?', { ok: 'Supprimer', danger: true })) {
             C.taches = (C.taches || []).filter(x => x.id !== t.id);
@@ -8569,7 +9602,7 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
             toast('Tâche supprimée');
           }
         } else if (nomAct === 'enregistrer-tache') {
-          sync();
+          synchroniserChamps(panneau);
           if (!t.titre.trim()) {
             toast('Indiquez l\'intitulé de la tâche');
             const elT = $('#tcTitre', panneau); if (elT) elT.focus();
@@ -8710,8 +9743,8 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
 
         ${onglet === 'texte' ? `
           <div class="card" style="margin-bottom:10px">
-            <p class="hint" style="margin-top:0">Collez votre liste (depuis un mail, Word, Notes ou WhatsApp). Astuce : une ligne finissant par <strong>:</strong> ou précédée de <strong>#</strong> crée automatiquement une Phase/Lot !</p>
-            <textarea id="txtImportColler" rows="8" placeholder="# 1. Montage mécanique\n- Mise en place et alignement châssis\n- Chevillage au sol\n\n# 2. Câblage & Automatisme\n- Raccordement 400V\n- Test chaîne des arrêts d'urgence" style="width:100%;font-size:13.5px"></textarea>
+            <p class="hint" style="margin-top:0">Collez votre liste (depuis un mail, Word, Notes ou WhatsApp). Astuce : une ligne finissant par <strong>:</strong> ou précédée de <strong>#</strong> crée une Phase/Lot, et <strong>[x2]</strong> / <strong>[x3]</strong> définit la pondération !</p>
+            <textarea id="txtImportColler" rows="8" placeholder="# 1. Montage mécanique\n- Mise en place et alignement châssis [x3]\n- Chevillage au sol [x2]\n\n# 2. Câblage & Automatisme\n- Raccordement 400V [x2]\n- Test chaîne des arrêts d'urgence [x3]" style="width:100%;font-size:13.5px"></textarea>
             <div style="margin-top:8px;display:flex;align-items:center;gap:8px">
               <input type="checkbox" id="chkRemplacerTxt" ${(C.taches || []).length === 0 || C.estDemo ? 'checked' : ''}>
               <label for="chkRemplacerTxt" style="font-size:13px">Remplacer la liste actuelle (${(C.taches || []).length} tâche${(C.taches || []).length > 1 ? 's' : ''})</label>
@@ -9888,6 +10921,16 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
     document.addEventListener('click', (e) => {
       // Ignorer les clics déjà dans une feuille modale
       if (e.target.closest('.sheet') || e.target.closest('.annot-editeur') || e.target.closest('.dlg-fond')) return;
+
+      // Actions sur les photos du journal quotidien (Client/Mémo BFR, Avant/Après, Annoter, Supprimer)
+      if (gererClicActionPhoto(
+        e,
+        () => { const jour = assurerJour(C.jourActif); jour.photos = jour.photos || []; return jour.photos; },
+        'jour',
+        () => rendreTout()
+      )) {
+        return;
+      }
 
       const btnJourNav = e.target.closest('[data-jour-aller]');
       if (btnJourNav) {

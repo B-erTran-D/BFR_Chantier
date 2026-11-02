@@ -2,9 +2,10 @@
 
 Application web mobile **100 % hors connexion**, calquée sur la charte officielle **BFR Systems** de [`BFR_Repport`](https://2kp46mwzkg-lang.github.io/BFR_Repport/), mais conçue spécifiquement pour **piloter la réalisation d'un chantier sur plusieurs jours** :
 
-- **Checklist de tâches par Phases / Lots** (configurable dans l'application, par copier-coller texte, ou par import Excel `.xlsx` / `.csv` / `.json`).
-- **Pointage terrain complet au doigt** : case à cocher instantanée (**Fait ce jour**), statuts détaillés (**À faire / En cours / Fait / Bloqué**), motif de blocage/réserve, commentaires vocaux (dictée) et **photos annotées au doigt** (flèche, cercle, crayon, texte).
-- **Suivi multi-jours (`Jour 1`, `Jour 2`, `Jour 3`…)** : chaque tâche cochée est rattachée à sa journée de réalisation, et chaque journée dispose de son propre journal (synthèse, horaires/équipe, programme prévu demain, photos d'avancement du jour).
+- **Checklist de tâches par Phases / Lots avec pondération (`×1 / ×2 / ×3`)** : configurable dans l'application, par copier-coller texte (syntaxe `[x2]` / `[x3]`), ou par import Excel `.xlsx` / `.csv` / `.json`.
+- **Pointage terrain complet & traçabilité des blocages** : case à cocher instantanée (**Fait ce jour**), statuts détaillés (**À faire / En cours / Fait / Bloqué**), **imputation des points bloquants** (*🏢 Attente Client / 🔧 Interne BFR / 🚚 Tiers*) avec durée d'attente et **archivage automatique des blocages levés**, commentaires vocaux (dictée).
+- **Photos intelligentes : Rapport Client vs Mémo interne BFR & mode Avant / Après** : bascule en 1 appui entre **📄 PDF Client** et **🔒 Mémo BFR** (conservé dans l'app mais exclu des PDF/Word envoyés au client), **comparatif côte à côte AVANT / APRÈS**, et annotations au doigt (flèche, cercle, crayon, texte).
+- **Pilotage multi-jours (`Jour 1 … Jour N`) & indicateur de cadence** : planification automatique sur les dates du chantier (`Lun.→Ven.` ou `7j/7` + exclusion de jours fériés/off) et comparaison visuelle **Avancement % vs Jours écoulés** (*En avance / Conforme / Légère dérive / Retard planning*).
 - **Rapport quotidien PDF (et Word `.docx`) « brandé » BFR Systems** (sans signature client chaque soir) prêt à envoyer par e-mail aux personnes concernées par le projet (Client, Chef de projet BFR, Chargé d'affaires, SAV…).
 
 ---

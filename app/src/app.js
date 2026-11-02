@@ -222,15 +222,15 @@
         slots.push({ id: c.client.logoId, get: () => c.client.logo, set: (v) => { c.client.logo = v; } });
       }
       (c.taches || []).forEach(t => {
-        (t.photos || []).forEach((ph, i) => {
-          if (!ph.id) ph.id = 'pht_' + c.id + '_' + t.id + '_' + i;
+        (t.photos || []).forEach((ph) => {
+          if (!ph.id) ph.id = uid('pht');
           slots.push({ id: ph.id, get: () => ph.dataUrl, set: (v) => { ph.dataUrl = v; } });
         });
       });
       Object.keys(c.jours || {}).forEach(d => {
         const j = c.jours[d];
-        ((j && j.photos) || []).forEach((ph, i) => {
-          if (!ph.id) ph.id = 'phj_' + c.id + '_' + d + '_' + i;
+        ((j && j.photos) || []).forEach((ph) => {
+          if (!ph.id) ph.id = uid('phj');
           slots.push({ id: ph.id, get: () => ph.dataUrl, set: (v) => { ph.dataUrl = v; } });
         });
       });
@@ -437,10 +437,29 @@
       { id: uid('dst'), nom: 'Responsable Montage / SAV', role: 'BFR Systems — Coordination', email: 'sav@bfr-systems.example', type: 'cc', actif: true }
     ];
 
-    // Marquage réaliste sur 2 jours (J1 hier + J2 aujourd'hui)
+    // Marquage réaliste sur 4 jours planifiés (J1 hier + J2 aujourd'hui + J3/J4 suite)
+    const dFin = new Date();
+    dFin.setDate(dFin.getDate() + 2);
+    const pad2 = (n) => ('0' + n).slice(-2);
+    ch.dateFinPrevue = dFin.getFullYear() + '-' + pad2(dFin.getMonth() + 1) + '-' + pad2(dFin.getDate());
+    ch.inclureWeekEnd = true;
+
     const ts = ch.taches;
     [0, 1, 2, 3].forEach(i => { if (ts[i]) { ts[i].statut = 'fait'; ts[i].faitLe = j1; ts[i].progression = 100; } });
-    if (ts[4]) { ts[4].statut = 'fait'; ts[4].faitLe = j2; ts[4].progression = 100; ts[4].commentaire = 'Assemblage mécanique validé entre cellule et convoyeur d\'entrée.'; }
+    if (ts[4]) {
+      ts[4].statut = 'fait'; ts[4].faitLe = j2; ts[4].progression = 100;
+      ts[4].commentaire = 'Assemblage mécanique validé entre cellule et convoyeur d\'entrée.';
+      // Exemple de trace de blocage levé (attente chariot élévateur client J1 -> levé J2)
+      ts[4].historiqueBlocages = [{
+        id: uid('blq'),
+        origine: 'CLIENT',
+        motif: 'Zone d\'assemblage encombrée par palettes client',
+        debutLe: j1,
+        leveLe: j2,
+        duree: '2h30',
+        noteLevee: 'Zone dégagée par le cariste client à 10h00'
+      }];
+    }
     if (ts[5]) { ts[5].statut = 'fait'; ts[5].faitLe = j2; ts[5].progression = 100; ts[5].commentaire = 'Nivellement laser contrôlé sur toute la ligne (+/- 0,5 mm).'; }
     if (ts[6]) { ts[6].statut = 'fait'; ts[6].faitLe = j2; ts[6].progression = 100; }
     if (ts[8]) { ts[8].statut = 'fait'; ts[8].faitLe = j2; ts[8].progression = 100; }
@@ -448,6 +467,9 @@
     if (ts[10]) { ts[10].statut = 'encours'; ts[10].progression = 50; }
     if (ts[11]) {
       ts[11].statut = 'bloque';
+      ts[11].blocageOrigine = 'CLIENT';
+      ts[11].bloqueDepuis = j2;
+      ts[11].blocageDuree = '4h estimées';
       ts[11].blocage = 'Armoire générale 400V client consignée — attente intervention électricien site demain 08h30.';
       ts[11].commentaire = 'Câble tiré et prêt devant le sectionneur.';
     }
@@ -726,13 +748,21 @@
         </button>
       </div>
       <div class="pilotage-prog-row">
-        <div class="prog-track"><div class="prog-fill" style="width:${bilan.pctGlobal}%"></div></div>
+        <div class="prog-track" title="Avancement ${bilan.pctGlobal}%${bilan.cadence && bilan.cadence.actif ? ' — Repère délai J' + bilan.numeroJour + '/' + bilan.nbJoursTotal + ' : ' + bilan.cadence.pctDelai + '%' : ''}">
+          <div class="prog-fill" style="width:${bilan.pctGlobal}%"></div>
+          ${(bilan.cadence && bilan.cadence.actif && bilan.cadence.pctDelai > 0 && bilan.cadence.pctDelai < 100)
+            ? `<div class="prog-target-tick" style="left:${bilan.cadence.pctDelai}%"></div>` : ''}
+        </div>
         <div class="prog-pct">${bilan.faitTotal.length}/${bilan.total} · ${bilan.pctGlobal}%</div>
       </div>
       <div class="pilotage-badges">
         <span class="mini-badge auj">✓ +${bilan.faitCeJour.length} ce jour</span>
+        ${(bilan.nbJoursTotal >= 2 && bilan.cadence)
+          ? `<span class="mini-badge cad-${esc(bilan.cadence.code)}">${bilan.cadence.code === 'ok' ? '🟢' : (bilan.cadence.code === 'derive' ? '🟠' : (bilan.cadence.code === 'retard' ? '🔴' : '⏳'))} ${esc(bilan.cadence.libelle)}${bilan.cadence.actif ? ' (' + bilan.pctGlobal + '% / J' + bilan.numeroJour + ' ' + bilan.cadence.pctDelai + '%)' : ''}</span>`
+          : ''}
         ${bilan.enCours.length ? `<span class="mini-badge encours">🔄 ${bilan.enCours.length} en cours</span>` : ''}
-        ${bilan.bloques.length ? `<span class="mini-badge bloque" data-filtre-rapide="bloque" style="cursor:pointer">🛑 ${bilan.bloques.length} bloqué${bilan.bloques.length > 1 ? 's' : ''}</span>` : ''}
+        ${bilan.bloques.length ? `<span class="mini-badge bloque" data-filtre-rapide="bloque" style="cursor:pointer">🛑 ${bilan.bloques.length} bloqué${bilan.bloques.length > 1 ? 's' : ''}${bilan.bloquesClient.length ? ' (' + bilan.bloquesClient.length + ' Client)' : ''}</span>` : ''}
+        ${bilan.blocagesLevesCeJour.length ? `<span class="mini-badge cad-ok">🔓 ${bilan.blocagesLevesCeJour.length} levé${bilan.blocagesLevesCeJour.length > 1 ? 's' : ''}</span>` : ''}
         ${bilan.jour.envoyeLe ? `<span class="mini-badge envoye">📤 Envoyé (${esc(bilan.jour.envoyeLe)})</span>` : ''}
       </div>`;
   }
@@ -767,10 +797,14 @@
     }
 
     if (bilan.bloques.length > 0 && filtreStatut !== 'bloque') {
+      const precOrig = [];
+      if (bilan.bloquesClient.length) precOrig.push(bilan.bloquesClient.length + ' Attente Client');
+      if (bilan.bloquesBfr.length) precOrig.push(bilan.bloquesBfr.length + ' Interne BFR');
+      if (bilan.bloquesTiers.length) precOrig.push(bilan.bloquesTiers.length + ' Tiers');
       html += `<div class="alerte-blocages" data-filtre-rapide="bloque" title="Afficher les points bloquants">
         <div style="flex-shrink:0;margin-top:2px">${ICO.shieldAlert(20, 'ico-danger')}</div>
         <div style="flex:1;min-width:0">
-          <strong>${bilan.bloques.length} point${bilan.bloques.length > 1 ? 's' : ''} bloquant${bilan.bloques.length > 1 ? 's' : ''} / réserve${bilan.bloques.length > 1 ? 's' : ''} en cours</strong>
+          <strong>${bilan.bloques.length} point${bilan.bloques.length > 1 ? 's' : ''} bloquant${bilan.bloques.length > 1 ? 's' : ''} en cours${precOrig.length ? ' — ' + esc(precOrig.join(' · ')) : ''}</strong>
           <span>${esc(bilan.bloques[0].titre)}${bilan.bloques.length > 1 ? ' (+' + (bilan.bloques.length - 1) + ' autre' + (bilan.bloques.length > 2 ? 's' : '') + ')' : ''} — Appuyez pour filtrer</span>
         </div>
       </div>`;
@@ -950,7 +984,11 @@
   function rendreLigneTache(t, dateJour) {
     const st = t.statut || 'afaire';
     const estFaitAuj = st === 'fait' && t.faitLe === dateJour;
-    const nbPhotos = (t.photos || []).filter(p => p && p.dataUrl).length;
+    const photosValides = (t.photos || []).filter(p => p && p.dataUrl);
+    const nbPhotosClient = photosValides.filter(p => p.visibilite !== 'interne').length;
+    const nbPhotosInterne = photosValides.filter(p => p.visibilite === 'interne').length;
+    const wPoids = Report.poidsTache(t);
+    const leveeCeJour = (t.historiqueBlocages || []).some(h => h && h.leveLe === dateJour);
     const noteApercu = st === 'bloque'
       ? (t.blocage || t.commentaire || '')
       : (t.commentaire || '');
@@ -963,7 +1001,8 @@
     } else if (st === 'encours') {
       badgeStatut = `<span class="tache-tag encours">En cours${t.progression ? ' · ' + t.progression + '%' : ''}</span>`;
     } else if (st === 'bloque') {
-      badgeStatut = `<span class="tache-tag bloque">🛑 Bloqué / Réserve</span>`;
+      const orig = Report.ORIGINES_BLOCAGE[t.blocageOrigine || 'CLIENT'] || Report.ORIGINES_BLOCAGE.CLIENT;
+      badgeStatut = `<span class="tache-tag bloque-client">🛑 ${esc(orig.libelle)}${t.blocageDuree ? ' · ' + esc(t.blocageDuree) : ''}</span>`;
     }
 
     const domLabel = Report.DOMAINES[t.domaine] || '';
@@ -974,17 +1013,327 @@
       </button>
       <div class="tache-main" data-a="ouvrir-tache" data-id="${esc(t.id)}">
         <div class="tache-titre">${esc(t.titre)}</div>
-        ${(badgeStatut || domLabel || nbPhotos || (t.commentaire && st !== 'bloque')) ? `
         <div class="tache-meta">
           ${badgeStatut}
+          ${leveeCeJour && st !== 'bloque' ? `<span class="tache-tag leve">🔓 Blocage levé</span>` : ''}
+          ${wPoids > 1 ? `<span class="tache-tag poids">×${wPoids}</span>` : ''}
           ${domLabel ? `<span class="tache-tag">${ICO.domaine(t.domaine, 12)} ${esc(domLabel)}</span>` : ''}
-          ${nbPhotos ? `<span class="tache-tag">📷 ${nbPhotos}</span>` : ''}
+          ${nbPhotosClient ? `<span class="tache-tag">📷 ${nbPhotosClient}</span>` : ''}
+          ${nbPhotosInterne ? `<span class="tache-tag" style="background:#eef2ff;color:var(--bfr-secondary)">🔒 ${nbPhotosInterne} BFR</span>` : ''}
           ${(t.commentaire && st === 'bloque' && t.blocage) ? `<span class="tache-tag">💬 Note</span>` : ''}
-        </div>` : ''}
+        </div>
         ${noteApercu ? `<div class="tache-note-apercu">${esc(noteApercu)}</div>` : ''}
-        ${nbPhotos ? `<div class="tache-thumbs">${(t.photos || []).filter(p => p && p.dataUrl).slice(0, 4).map(p => `<img src="${p.dataUrl}" alt="Photo">`).join('')}</div>` : ''}
+        ${photosValides.length ? `<div class="tache-thumbs">${photosValides.slice(0, 4).map(p => `<img src="${p.dataUrl}" alt="Photo" style="${p.visibilite === 'interne' ? 'border:1.5px dashed var(--bfr-secondary);opacity:0.86' : ''}">`).join('')}</div>` : ''}
       </div>
     </div>`;
+  }
+
+  /* ===================== Composant Photos unifié (Client / Mémo BFR + Avant / Après) === */
+  function construireBlocPhotosHtml(photosBrutes, pfx, libelleTitre) {
+    const phs = (photosBrutes || []).map((p, idx) => ({ p: p, idx: idx })).filter(x => x.p && x.p.dataUrl);
+    const nbClient = phs.filter(x => x.p.visibilite !== 'interne').length;
+    const nbInterne = phs.filter(x => x.p.visibilite === 'interne').length;
+
+    // Identifier les duos Avant / Après liés par paireId (ou avant sans après en attente)
+    const consommes = new Set();
+    const cartes = [];
+
+    for (let k = 0; k < phs.length; k++) {
+      const cur = phs[k];
+      if (consommes.has(cur.idx)) continue;
+      if (cur.p.avantApres === 'avant') {
+        let part = null;
+        if (cur.p.paireId) {
+          part = phs.find(x => x.idx !== cur.idx && !consommes.has(x.idx) && x.p.avantApres === 'apres' && x.p.paireId === cur.p.paireId);
+        }
+        if (!part) {
+          part = phs.find(x => x.idx > cur.idx && !consommes.has(x.idx) && x.p.avantApres === 'apres' && !x.p.paireId);
+        }
+        consommes.add(cur.idx);
+        if (part) consommes.add(part.idx);
+        cartes.push({ type: 'duo', avant: cur, apres: part });
+      } else {
+        consommes.add(cur.idx);
+        cartes.push({ type: 'simple', item: cur });
+      }
+    }
+
+    const statsTxt = phs.length
+      ? `(${nbClient} PDF Client${nbInterne ? ' · ' + nbInterne + ' 🔒 Mémo BFR' : ''})`
+      : '(0)';
+
+    return `
+      <label>${esc(libelleTitre)} <span style="font-weight:500;color:var(--bfr-text-muted)">${statsTxt}</span></label>
+      <div class="btnrow" style="margin-bottom:8px">
+        <label class="btn sm ghost" style="cursor:pointer;margin:0">
+          <input type="file" accept="image/*" capture="environment" data-ph-add="${pfx}:cam" style="display:none">
+          ${ICO.camera(15)} Photo
+        </label>
+        <label class="btn sm grey" style="cursor:pointer;margin:0">
+          <input type="file" accept="image/*" multiple data-ph-add="${pfx}:gal" style="display:none">
+          ${ICO.image(15)} Galerie
+        </label>
+        <label class="btn sm ghost" style="cursor:pointer;margin:0;border-color:var(--bfr-secondary);color:var(--bfr-secondary)">
+          <input type="file" accept="image/*" data-ph-add="${pfx}:duo" style="display:none">
+          ⚖️ Avant / Après
+        </label>
+      </div>
+      ${cartes.length ? `<div class="ph-grid">
+        ${cartes.map(c => {
+          if (c.type === 'duo') {
+            const av = c.avant.p, idxAv = c.avant.idx;
+            const ap = c.apres ? c.apres.p : null;
+            const idxAp = c.apres ? c.apres.idx : -1;
+            const estInt = av.visibilite === 'interne';
+            const pid = av.paireId || ('duo_' + idxAv);
+            return `<div class="ph-duo-card ${estInt ? 'interne' : ''}">
+              <div class="ph-duo-hdr">
+                <span>⚖️ Comparatif Avant / Après</span>
+                <div style="display:flex;gap:5px;align-items:center">
+                  <button type="button" class="ph-vis-btn ${estInt ? 'interne' : 'client'}" style="position:static" data-ph-vis="${pfx}:${idxAv}" title="Basculer Rapport Client / Mémo interne BFR">
+                    ${estInt ? '🔒 Mémo BFR' : '📄 PDF Client'}
+                  </button>
+                  <button type="button" class="btn sm grey" data-ph-dissocier="${pfx}:${idxAv}" style="min-height:22px;padding:1px 6px;font-size:10px" title="Repasser en photo simple">✕ Duo</button>
+                </div>
+              </div>
+              <div class="ph-duo-cols">
+                <div class="ph-duo-slot">
+                  <div class="ph-duo-tag avant">◀ AVANT</div>
+                  <div class="ph-img-wrap" style="height:92px">
+                    <img src="${av.dataUrl}" alt="Avant" data-ph-annot="${pfx}:${idxAv}">
+                  </div>
+                  <div style="padding:4px;display:flex;gap:4px">
+                    <button type="button" class="btn sm ghost" data-ph-annot="${pfx}:${idxAv}" style="min-height:24px;padding:1px 5px;font-size:10.5px;flex:1">${ICO.pen(11)} Annoter</button>
+                    <button type="button" class="btn sm danger" data-ph-del="${pfx}:${idxAv}" style="min-height:24px;padding:1px 6px;font-size:10.5px">${ICO.trash(11)}</button>
+                  </div>
+                </div>
+                <div class="ph-duo-slot">
+                  <div class="ph-duo-tag apres">APRÈS ▶</div>
+                  ${ap ? `
+                    <div class="ph-img-wrap" style="height:92px">
+                      <img src="${ap.dataUrl}" alt="Après" data-ph-annot="${pfx}:${idxAp}">
+                    </div>
+                    <div style="padding:4px;display:flex;gap:4px">
+                      <button type="button" class="btn sm ghost" data-ph-annot="${pfx}:${idxAp}" style="min-height:24px;padding:1px 5px;font-size:10.5px;flex:1">${ICO.pen(11)} Annoter</button>
+                      <button type="button" class="btn sm danger" data-ph-del="${pfx}:${idxAp}" style="min-height:24px;padding:1px 6px;font-size:10.5px">${ICO.trash(11)}</button>
+                    </div>
+                  ` : `
+                    <label class="ph-duo-vide" style="margin:0">
+                      <input type="file" accept="image/*" data-ph-apres="${pfx}:${idxAv}:${esc(pid)}" style="display:none">
+                      ${ICO.camera(18)}
+                      <span>+ Photo APRÈS</span>
+                    </label>
+                  `}
+                </div>
+              </div>
+              <input type="text" data-ph-leg="${pfx}:${idxAv}" value="${esc(av.legende || (ap && ap.legende) || '')}" placeholder="Légende commune Avant / Après…" style="margin-top:6px;font-size:11.5px;padding:5px 7px;border:1px solid var(--bfr-border);border-radius:5px;width:100%;background:#fff">
+            </div>`;
+          }
+
+          const ph = c.item.p, idx = c.item.idx;
+          const estInt = ph.visibilite === 'interne';
+          const aa = ph.avantApres || '';
+          const aaTxt = aa === 'avant' ? '◀ AVANT' : (aa === 'apres' ? 'APRÈS ▶' : 'Avant/Après');
+          return `<div class="ph-card ${estInt ? 'interne' : ''}">
+            <div class="ph-img-wrap">
+              <img src="${ph.dataUrl}" alt="Photo" data-ph-annot="${pfx}:${idx}" title="Appuyer pour annoter au doigt">
+              <button type="button" class="ph-vis-btn ${estInt ? 'interne' : 'client'}" data-ph-vis="${pfx}:${idx}" title="Basculer Rapport Client / Mémo interne BFR">
+                ${estInt ? '🔒 Mémo BFR' : '📄 PDF Client'}
+              </button>
+              <button type="button" class="ph-aa-btn ${esc(aa)}" data-ph-aa="${pfx}:${idx}" title="Marquer en Avant / Après">${aaTxt}</button>
+            </div>
+            <div style="padding:5px 6px;display:flex;flex-direction:column;gap:4px">
+              <input type="text" data-ph-leg="${pfx}:${idx}" value="${esc(ph.legende || '')}" placeholder="${estInt ? 'Note mémo interne BFR…' : 'Légende rapport…'}" style="font-size:11.5px;padding:4px 6px;border:1px solid var(--bfr-border);border-radius:4px;width:100%">
+              <div style="display:flex;gap:4px">
+                <button type="button" class="btn sm ghost" data-ph-annot="${pfx}:${idx}" style="min-height:25px;padding:2px 5px;font-size:11px;flex:1">${ICO.pen(11)} Annoter</button>
+                <button type="button" class="btn sm danger" data-ph-del="${pfx}:${idx}" style="min-height:25px;padding:2px 6px;font-size:11px">${ICO.trash(11)}</button>
+              </div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>` : ''}`;
+  }
+
+  function brancherBlocPhotos(conteneur, getListePhotos, pfx, rafraichir, avantModif) {
+    // Saisie légendes
+    $$(`[data-ph-leg^="${pfx}:"]`, conteneur).forEach(inp => {
+      inp.addEventListener('input', () => {
+        const idx = Number(inp.dataset.phLeg.split(':')[1]);
+        const arr = getListePhotos();
+        const ph = arr && arr[idx];
+        if (!ph) return;
+        ph.legende = inp.value;
+        if (ph.paireId) {
+          arr.forEach(x => { if (x && x !== ph && x.paireId === ph.paireId) x.legende = inp.value; });
+        }
+        planifierSauvegarde();
+      });
+    });
+
+    // Ajout photos (Caméra, Galerie ou Duo Avant/Après)
+    $$(`[data-ph-add^="${pfx}:"]`, conteneur).forEach(inp => {
+      inp.addEventListener('change', async () => {
+        const mode = inp.dataset.phAdd.split(':')[1];
+        const files = Array.from(inp.files || []);
+        if (!files.length) return;
+        if (avantModif) avantModif();
+        const arr = getListePhotos();
+        const paireId = mode === 'duo' ? uid('duo') : '';
+        for (let i = 0; i < files.length; i++) {
+          try {
+            const dataUrl = await compresserImage(files[i], 1500, 0.85);
+            const roleAA = mode === 'duo' ? (i === 0 ? 'avant' : (i === 1 ? 'apres' : '')) : '';
+            const ph = {
+              id: uid(pfx === 'jour' ? 'phj' : 'pht'),
+              dataUrl: dataUrl,
+              legende: '',
+              visibilite: 'client',
+              avantApres: roleAA,
+              paireId: roleAA ? paireId : '',
+              datePrise: C.jourActif || aujourdhuiISO(),
+              annotations: []
+            };
+            arr.push(ph);
+            if (files.length === 1 && typeof Annotation !== 'undefined') {
+              Annotation.ouvrir(ph, { fin: () => { planifierSauvegarde(); rafraichir(); } });
+              return;
+            }
+          } catch (_) { toast('Impossible de charger cette image'); }
+        }
+        planifierSauvegarde();
+        rafraichir();
+      });
+    });
+
+    // Ajout de la photo APRÈS directement sur une carte Duo en attente
+    $$(`[data-ph-apres^="${pfx}:"]`, conteneur).forEach(inp => {
+      inp.addEventListener('change', async () => {
+        const f = inp.files && inp.files[0];
+        if (!f) return;
+        if (avantModif) avantModif();
+        const parts = inp.dataset.phApres.split(':');
+        const idxAv = Number(parts[1]);
+        const arr = getListePhotos();
+        const av = arr && arr[idxAv];
+        const pid = (av && av.paireId) || parts[2] || uid('duo');
+        if (av) av.paireId = pid;
+        try {
+          const dataUrl = await compresserImage(f, 1500, 0.85);
+          const phAp = {
+            id: uid(pfx === 'jour' ? 'phj' : 'pht'),
+            dataUrl: dataUrl,
+            legende: (av && av.legende) || '',
+            visibilite: (av && av.visibilite) || 'client',
+            avantApres: 'apres',
+            paireId: pid,
+            datePrise: C.jourActif || aujourdhuiISO(),
+            annotations: []
+          };
+          arr.push(phAp);
+          if (typeof Annotation !== 'undefined') {
+            Annotation.ouvrir(phAp, { fin: () => { planifierSauvegarde(); rafraichir(); } });
+            return;
+          }
+        } catch (_) { toast('Image illisible'); }
+        planifierSauvegarde();
+        rafraichir();
+      });
+    });
+  }
+
+  function gererClicActionPhoto(e, getListePhotos, pfx, rafraichir, avantModif) {
+    const bVis = e.target.closest(`[data-ph-vis^="${pfx}:"]`);
+    if (bVis) {
+      if (avantModif) avantModif();
+      const idx = Number(bVis.dataset.phVis.split(':')[1]);
+      const arr = getListePhotos();
+      const ph = arr && arr[idx];
+      if (ph) {
+        const nv = ph.visibilite === 'interne' ? 'client' : 'interne';
+        ph.visibilite = nv;
+        if (ph.paireId) arr.forEach(x => { if (x && x.paireId === ph.paireId) x.visibilite = nv; });
+        planifierSauvegarde();
+        rafraichir();
+        toast(nv === 'interne' ? '🔒 Classée en Mémo interne BFR (non imprimée au rapport client)' : '📄 Incluse dans le rapport PDF Client');
+      }
+      return true;
+    }
+
+    const bAA = e.target.closest(`[data-ph-aa^="${pfx}:"]`);
+    if (bAA) {
+      if (avantModif) avantModif();
+      const idx = Number(bAA.dataset.phAa.split(':')[1]);
+      const arr = getListePhotos();
+      const ph = arr && arr[idx];
+      if (ph) {
+        if (!ph.avantApres) {
+          // Chercher s'il existe une photo AVANT seule en attente d'une photo APRÈS
+          const avAttente = arr.find((x, k) => k !== idx && x && x.avantApres === 'avant' && (!x.paireId || !arr.some(y => y !== x && y.avantApres === 'apres' && y.paireId === x.paireId)));
+          if (avAttente) {
+            const pid = avAttente.paireId || uid('duo');
+            avAttente.paireId = pid;
+            ph.avantApres = 'apres';
+            ph.paireId = pid;
+            ph.visibilite = avAttente.visibilite || 'client';
+            toast('⚖️ Associée en photo APRÈS du comparatif');
+          } else {
+            ph.avantApres = 'avant';
+            ph.paireId = uid('duo');
+            toast('◀ Marquée AVANT — ajoutez maintenant la photo APRÈS');
+          }
+        } else {
+          ph.avantApres = '';
+          ph.paireId = '';
+        }
+        planifierSauvegarde();
+        rafraichir();
+      }
+      return true;
+    }
+
+    const bDis = e.target.closest(`[data-ph-dissocier^="${pfx}:"]`);
+    if (bDis) {
+      if (avantModif) avantModif();
+      const idx = Number(bDis.dataset.phDissocier.split(':')[1]);
+      const arr = getListePhotos();
+      const ph = arr && arr[idx];
+      if (ph) {
+        const pid = ph.paireId;
+        ph.avantApres = '';
+        ph.paireId = '';
+        if (pid) arr.forEach(x => { if (x && x.paireId === pid) { x.avantApres = ''; x.paireId = ''; } });
+        planifierSauvegarde();
+        rafraichir();
+      }
+      return true;
+    }
+
+    const bAnn = e.target.closest(`[data-ph-annot^="${pfx}:"]`);
+    if (bAnn) {
+      if (avantModif) avantModif();
+      const idx = Number(bAnn.dataset.phAnnot.split(':')[1]);
+      const arr = getListePhotos();
+      const ph = arr && arr[idx];
+      if (ph && typeof Annotation !== 'undefined') {
+        Annotation.ouvrir(ph, { fin: () => { planifierSauvegarde(); rafraichir(); } });
+      }
+      return true;
+    }
+
+    const bDel = e.target.closest(`[data-ph-del^="${pfx}:"]`);
+    if (bDel) {
+      if (avantModif) avantModif();
+      const idx = Number(bDel.dataset.phDel.split(':')[1]);
+      const arr = getListePhotos();
+      if (arr && arr[idx]) {
+        arr.splice(idx, 1);
+        planifierSauvegarde();
+        rafraichir();
+      }
+      return true;
+    }
+
+    return false;
   }
 
   function rendreJournal(bilan) {
@@ -1038,30 +1387,7 @@
       </div>
 
       <div class="field" style="margin-bottom:0">
-        <label>Photos d'avancement du jour (${photosJ.length})</label>
-        <div class="btnrow" style="margin-bottom:8px">
-          <label class="btn sm ghost" style="cursor:pointer;margin:0">
-            <input type="file" accept="image/*" capture="environment" data-photo-jour="camera" style="display:none">
-            ${ICO.camera(16)} Prendre photo
-          </label>
-          <label class="btn sm grey" style="cursor:pointer;margin:0">
-            <input type="file" accept="image/*" multiple data-photo-jour="galerie" style="display:none">
-            ${ICO.image(16)} Galerie
-          </label>
-        </div>
-        ${photosJ.length ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px">
-          ${photosJ.map((ph, idx) => `
-            <div style="border:1px solid var(--bfr-border);border-radius:8px;overflow:hidden;background:#fff">
-              <img src="${ph.dataUrl}" alt="Photo jour" data-a="annoter-photo-jour" data-idx="${idx}" style="width:100%;height:96px;object-fit:cover;display:block;cursor:pointer" title="Appuyer pour annoter au doigt">
-              <div style="padding:5px 6px;display:flex;flex-direction:column;gap:4px">
-                <input type="text" data-legende-jour="${idx}" value="${esc(ph.legende || '')}" placeholder="Légende…" style="font-size:11.5px;padding:4px 6px;border:1px solid var(--bfr-border);border-radius:4px;width:100%">
-                <div style="display:flex;justify-content:space-between;gap:4px">
-                  <button type="button" class="btn sm ghost" data-a="annoter-photo-jour" data-idx="${idx}" style="min-height:26px;padding:2px 6px;font-size:11px;flex:1">${ICO.pen(12)} Annoter</button>
-                  <button type="button" class="btn sm danger" data-a="suppr-photo-jour" data-idx="${idx}" style="min-height:26px;padding:2px 6px;font-size:11px">${ICO.trash(12)}</button>
-                </div>
-              </div>
-            </div>`).join('')}
-        </div>` : ''}
+        ${construireBlocPhotosHtml(j.photos || [], 'jour', 'Photos d\'avancement du jour')}
       </div>
     </div>`;
 
@@ -1073,36 +1399,13 @@
         planifierSauvegarde();
       });
     });
-    $$('[data-legende-jour]', el).forEach(inp => {
-      inp.addEventListener('input', () => {
-        const jour = assurerJour(C.jourActif);
-        const idx = Number(inp.dataset.legendeJour);
-        if (jour.photos && jour.photos[idx]) {
-          jour.photos[idx].legende = inp.value;
-          planifierSauvegarde();
-        }
-      });
-    });
-    $$('[data-photo-jour]', el).forEach(inp => {
-      inp.addEventListener('change', async () => {
-        const files = Array.from(inp.files || []);
-        if (!files.length) return;
-        const jour = assurerJour(C.jourActif);
-        jour.photos = jour.photos || [];
-        for (const f of files) {
-          try {
-            const dataUrl = await compresserImage(f, 1500, 0.85);
-            const ph = { id: uid('phj'), dataUrl: dataUrl, legende: '', annotations: [] };
-            jour.photos.push(ph);
-            if (files.length === 1 && typeof Annotation !== 'undefined') {
-              Annotation.ouvrir(ph, { fin: () => { planifierSauvegarde(); rendreTout(); } });
-            }
-          } catch (_) { toast('Impossible de charger cette image'); }
-        }
-        planifierSauvegarde();
-        rendreTout();
-      });
-    });
+
+    brancherBlocPhotos(
+      el,
+      () => { const jour = assurerJour(C.jourActif); jour.photos = jour.photos || []; return jour.photos; },
+      'jour',
+      () => rendreTout()
+    );
   }
 
   function rendreCloture(bilan) {
@@ -1121,9 +1424,10 @@
       </div>
       <p class="hint">
         Rapport PDF officiel <strong>BFR Systems</strong> du <strong>${esc(Report.frDate(bilan.dateJour))}</strong> (sans signature client quotidienne) :
-        avancement global <strong>${bilan.pctGlobal} %</strong>, <strong>${bilan.faitCeJour.length}</strong> tâche${bilan.faitCeJour.length > 1 ? 's' : ''} du jour,
-        <strong>${bilan.bloques.length}</strong> point${bilan.bloques.length > 1 ? 's' : ''} bloquant${bilan.bloques.length > 1 ? 's' : ''},
-        <strong>${bilan.nbPhotosJour}</strong> photo${bilan.nbPhotosJour > 1 ? 's' : ''}.
+        avancement global <strong>${bilan.pctGlobal} %</strong>${bilan.nbJoursTotal >= 2 && bilan.cadence ? ` (${esc(bilan.cadence.libelle)})` : ''},
+        <strong>${bilan.faitCeJour.length}</strong> tâche${bilan.faitCeJour.length > 1 ? 's' : ''} du jour,
+        <strong>${bilan.bloques.length}</strong> blocage${bilan.bloques.length > 1 ? 's' : ''}${bilan.blocagesLevesCeJour.length ? ` (+${bilan.blocagesLevesCeJour.length} levé${bilan.blocagesLevesCeJour.length > 1 ? 's' : ''})` : ''},
+        <strong>${bilan.nbPhotosJour}</strong> photo${bilan.nbPhotosJour > 1 ? 's' : ''} client${bilan.nbPhotosInterne ? ` (<em>${bilan.nbPhotosInterne} mémo BFR masquée${bilan.nbPhotosInterne > 1 ? 's' : ''}</em>)` : ''}.
       </p>
 
       <button type="button" class="btn or wide" id="btnSoumettre" data-a="soumettre">
@@ -1159,7 +1463,35 @@
     rendreCloture(bilan);
   }
 
-  /* ===================== Actions Tâches =============================== */
+  /* ===================== Actions Tâches & Traçabilité Blocages ======== */
+  function archiverLeveeBlocage(t, noteLevee) {
+    if (!t || t.statut !== 'bloque') return;
+    t.historiqueBlocages = t.historiqueBlocages || [];
+    const deb = t.bloqueDepuis || C.jourActif || aujourdhuiISO();
+    const fin = C.jourActif || aujourdhuiISO();
+    let duree = (t.blocageDuree || '').trim();
+    if (!duree && deb && fin && fin > deb) {
+      const m1 = /^(\d{4})-(\d{2})-(\d{2})$/.exec(deb);
+      const m2 = /^(\d{4})-(\d{2})-(\d{2})$/.exec(fin);
+      if (m1 && m2) {
+        const nbJ = Math.max(1, Math.round((new Date(+m2[1], +m2[2] - 1, +m2[3]) - new Date(+m1[1], +m1[2] - 1, +m1[3])) / 86400000));
+        duree = nbJ + ' j.';
+      }
+    }
+    t.historiqueBlocages.push({
+      id: uid('blq'),
+      origine: t.blocageOrigine || 'CLIENT',
+      motif: (t.blocage || '').trim() || 'Point bloquant',
+      debutLe: deb,
+      leveLe: fin,
+      duree: duree,
+      noteLevee: (noteLevee || '').trim()
+    });
+    t.blocage = '';
+    t.bloqueDepuis = '';
+    t.blocageDuree = '';
+  }
+
   function cocherDecocherTache(id) {
     const t = (C.taches || []).find(x => x.id === id);
     if (!t) return;
@@ -1169,11 +1501,13 @@
       t.progression = 0;
       toast('Tâche remise « À faire »');
     } else {
+      const etaitBloquee = t.statut === 'bloque';
+      if (etaitBloquee) archiverLeveeBlocage(t, 'Tâche réalisée');
       t.statut = 'fait';
       t.faitLe = C.jourActif || aujourdhuiISO();
       t.progression = 100;
       const b = Report.calculerBilan(C, C.jourActif);
-      toast('✓ Pointée Fait (Jour ' + b.numeroJour + ' · ' + b.pctGlobal + ' %)');
+      toast((etaitBloquee ? '🔓 Blocage levé & Fait' : '✓ Pointée Fait') + ' (Jour ' + b.numeroJour + ' · ' + b.pctGlobal + ' %)');
     }
     planifierSauvegarde();
     rendreTout();
@@ -1190,20 +1524,38 @@
           phaseId: phaseParDefaut || phases[0].id,
           titre: '',
           domaine: '',
+          poids: 1,
           statut: 'afaire',
           progression: 0,
           faitLe: '',
           commentaire: '',
           blocage: '',
+          blocageOrigine: 'CLIENT',
+          bloqueDepuis: '',
+          blocageDuree: '',
+          historiqueBlocages: [],
           photos: []
         }
       : (C.taches || []).find(x => x.id === tacheId);
 
     if (!t) return;
 
+    function synchroniserChamps(panneau) {
+      const elTitre = $('#tcTitre', panneau); if (elTitre) t.titre = elTitre.value;
+      const elPh = $('#tcPhase', panneau); if (elPh) t.phaseId = elPh.value;
+      const elDom = $('#tcDomaine', panneau); if (elDom) t.domaine = elDom.value;
+      const elComm = $('#tcComm', panneau); if (elComm) t.commentaire = elComm.value;
+      const elBloc = $('#tcBlocage', panneau); if (elBloc) t.blocage = elBloc.value;
+      const elDep = $('#tcBloqueDepuis', panneau); if (elDep) t.bloqueDepuis = elDep.value;
+      const elDur = $('#tcBlocageDuree', panneau); if (elDur) t.blocageDuree = elDur.value;
+      const elFaitLe = $('#tcFaitLe', panneau); if (elFaitLe) t.faitLe = elFaitLe.value;
+    }
+
     function construireContenu(panneau) {
       const st = t.statut || 'afaire';
-      const phs = (t.photos || []).filter(p => p && p.dataUrl);
+      const wPoids = Report.poidsTache(t);
+      const orig = t.blocageOrigine || 'CLIENT';
+      const hist = Array.isArray(t.historiqueBlocages) ? t.historiqueBlocages : [];
 
       panneau.innerHTML = `
         <div class="grab"></div>
@@ -1235,6 +1587,15 @@
           </div>
         </div>
 
+        <div class="field">
+          <label>Pondération / Charge dans l'avancement global</label>
+          <div class="poids-grid">
+            <button type="button" class="poids-opt ${wPoids === 1 ? 'on' : ''}" data-poids="1">×1 Standard</button>
+            <button type="button" class="poids-opt ${wPoids === 2 ? 'on' : ''}" data-poids="2">×2 Moyen</button>
+            <button type="button" class="poids-opt ${wPoids === 3 ? 'on' : ''}" data-poids="3">×3 Gros poste</button>
+          </div>
+        </div>
+
         <label style="display:block;font-family:var(--font-heading);font-size:12.5px;font-weight:600;color:var(--bfr-secondary);margin-top:4px">Statut d'avancement</label>
         <div class="statut-grid">
           <button type="button" class="statut-opt ${st === 'afaire' ? 'on-afaire' : ''}" data-st="afaire">⬜ À faire</button>
@@ -1259,11 +1620,50 @@
 
         ${st === 'bloque' ? `
         <div class="field" style="background:var(--def-bg);padding:10px;border-radius:8px;border:1.5px solid var(--def-border)">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-            <label style="color:#991b1b;margin:0">🛑 Motif du blocage / Action attendue *</label>
-            <button type="button" class="btn sm grey btn-dictee" data-dictee-tc="tcBlocage" style="min-height:28px;padding:2px 8px;font-size:11px">${ICO.mic(13)} Dicter</button>
+          <label style="color:#991b1b;margin:0">🛑 Imputation du point bloquant</label>
+          <div class="orig-grid">
+            <button type="button" class="orig-opt ${orig === 'CLIENT' ? 'on' : ''}" data-orig="CLIENT">🏢 Attente Client</button>
+            <button type="button" class="orig-opt ${orig === 'BFR' ? 'on' : ''}" data-orig="BFR">🔧 Interne BFR</button>
+            <button type="button" class="orig-opt ${orig === 'TIERS' ? 'on' : ''}" data-orig="TIERS">🚚 Tiers / Fourn.</button>
           </div>
-          <textarea id="tcBlocage" rows="2" placeholder="Ex. Attente alimentation 400V client, pièce manquante, réserve…">${esc(t.blocage || '')}</textarea>
+
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <label style="color:#991b1b;margin:0">Motif du blocage / Action attendue *</label>
+            <button type="button" class="btn sm grey btn-dictee" data-dictee-tc="tcBlocage" style="min-height:26px;padding:2px 8px;font-size:11px">${ICO.mic(13)} Dicter</button>
+          </div>
+          <textarea id="tcBlocage" rows="2" placeholder="Ex. Attente alimentation 400V client, zone consignée, pièce manquante…">${esc(t.blocage || '')}</textarea>
+
+          <div class="grid2" style="margin-top:8px">
+            <div class="field" style="margin:0">
+              <label style="color:#991b1b;font-size:11.5px">Bloqué depuis le</label>
+              <input type="date" id="tcBloqueDepuis" value="${esc(t.bloqueDepuis || C.jourActif || aujourdhuiISO())}" style="background:#fff">
+            </div>
+            <div class="field" style="margin:0">
+              <label style="color:#991b1b;font-size:11.5px">Durée d'attente / impact</label>
+              <input type="text" id="tcBlocageDuree" value="${esc(t.blocageDuree || '')}" placeholder="Ex. 3h, 0,5 j, 1 jour…" style="background:#fff">
+            </div>
+          </div>
+
+          <button type="button" class="btn sm wide" data-act="lever-blocage" style="margin-top:10px;background:var(--ok);border-color:var(--ok);color:#fff">
+            🔓 Lever ce point bloquant (conserver la trace)
+          </button>
+        </div>` : ''}
+
+        ${hist.length ? `
+        <div class="field">
+          <label>🔓 Historique des blocages levés (${hist.length})</label>
+          <div class="hist-bloq-liste">
+            ${hist.map((h, hi) => {
+              const oInfo = Report.ORIGINES_BLOCAGE[h.origine || 'CLIENT'] || Report.ORIGINES_BLOCAGE.CLIENT;
+              return `<div class="hist-bloq-item">
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
+                  <strong style="color:var(--bfr-secondary)">[${esc(oInfo.libelle)}] Bloqué le ${esc(Report.frDateCourte(h.debutLe))} → Levé le ${esc(Report.frDateCourte(h.leveLe))}${h.duree ? ' (' + esc(h.duree) + ')' : ''}</strong>
+                  <button type="button" class="btn sm danger" data-suppr-hist="${hi}" style="min-height:22px;padding:1px 6px;font-size:10px" title="Supprimer cette trace">✕</button>
+                </div>
+                <div style="color:var(--bfr-text-muted)">${esc(h.motif)}${h.noteLevee ? ' — <em>' + esc(h.noteLevee) + '</em>' : ''}</div>
+              </div>`;
+            }).join('')}
+          </div>
         </div>` : ''}
 
         <div class="field">
@@ -1275,30 +1675,7 @@
         </div>
 
         <div class="field">
-          <label>Photos sur cette tâche (${phs.length}) — annotables au doigt</label>
-          <div class="btnrow" style="margin-bottom:8px">
-            <label class="btn sm ghost" style="cursor:pointer;margin:0">
-              <input type="file" accept="image/*" capture="environment" id="tcPhotoCam" style="display:none">
-              ${ICO.camera(16)} Appareil photo
-            </label>
-            <label class="btn sm grey" style="cursor:pointer;margin:0">
-              <input type="file" accept="image/*" multiple id="tcPhotoGal" style="display:none">
-              ${ICO.image(16)} Galerie
-            </label>
-          </div>
-          ${phs.length ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(125px,1fr));gap:8px">
-            ${phs.map((ph, idx) => `
-              <div style="border:1px solid var(--bfr-border);border-radius:8px;overflow:hidden;background:#fff">
-                <img src="${ph.dataUrl}" alt="Photo tâche" data-act="annoter-tc-photo" data-idx="${idx}" style="width:100%;height:88px;object-fit:cover;display:block;cursor:pointer">
-                <div style="padding:5px">
-                  <input type="text" data-tc-leg="${idx}" value="${esc(ph.legende || '')}" placeholder="Légende…" style="font-size:11px;padding:4px 6px;border:1px solid var(--bfr-border);border-radius:4px;width:100%;margin-bottom:4px">
-                  <div style="display:flex;gap:4px">
-                    <button type="button" class="btn sm ghost" data-act="annoter-tc-photo" data-idx="${idx}" style="min-height:25px;padding:2px 5px;font-size:11px;flex:1">${ICO.pen(11)} Annoter</button>
-                    <button type="button" class="btn sm danger" data-act="suppr-tc-photo" data-idx="${idx}" style="min-height:25px;padding:2px 6px;font-size:11px">${ICO.trash(11)}</button>
-                  </div>
-                </div>
-              </div>`).join('')}
-          </div>` : ''}
+          ${construireBlocPhotosHtml(t.photos || [], 'tc', 'Photos sur cette tâche')}
         </div>
 
         <div class="btnrow" style="margin-top:12px">
@@ -1306,46 +1683,13 @@
           <button type="button" class="btn principal" data-act="enregistrer-tache">${ICO.check(17)} ${estNouvelle ? 'Ajouter la tâche' : 'Enregistrer'}</button>
         </div>`;
 
-      const synchroniserChamps = () => {
-        const elTitre = $('#tcTitre', panneau);
-        if (elTitre) t.titre = elTitre.value;
-        const elPh = $('#tcPhase', panneau);
-        if (elPh) t.phaseId = elPh.value;
-        const elDom = $('#tcDomaine', panneau);
-        if (elDom) t.domaine = elDom.value;
-        const elComm = $('#tcComm', panneau);
-        if (elComm) t.commentaire = elComm.value;
-        const elBloc = $('#tcBlocage', panneau);
-        if (elBloc) t.blocage = elBloc.value;
-        const elFaitLe = $('#tcFaitLe', panneau);
-        if (elFaitLe) t.faitLe = elFaitLe.value;
-        $$('[data-tc-leg]', panneau).forEach(inp => {
-          const i = Number(inp.dataset.tcLeg);
-          if (t.photos && t.photos[i]) t.photos[i].legende = inp.value;
-        });
-      };
-
-      const gererAjoutPhotos = async (files) => {
-        synchroniserChamps();
-        for (const f of files) {
-          try {
-            const dataUrl = await compresserImage(f, 1500, 0.85);
-            const ph = { id: uid('pht'), dataUrl: dataUrl, legende: '', annotations: [] };
-            t.photos = t.photos || [];
-            t.photos.push(ph);
-            if (files.length === 1 && typeof Annotation !== 'undefined') {
-              Annotation.ouvrir(ph, { fin: () => construireContenu(panneau) });
-              return;
-            }
-          } catch (_) { toast('Image illisible'); }
-        }
-        construireContenu(panneau);
-      };
-
-      const cam = $('#tcPhotoCam', panneau);
-      const gal = $('#tcPhotoGal', panneau);
-      if (cam) cam.addEventListener('change', () => gererAjoutPhotos(Array.from(cam.files || [])));
-      if (gal) gal.addEventListener('change', () => gererAjoutPhotos(Array.from(gal.files || [])));
+      brancherBlocPhotos(
+        panneau,
+        () => { t.photos = t.photos || []; return t.photos; },
+        'tc',
+        () => construireContenu(panneau),
+        () => synchroniserChamps(panneau)
+      );
 
       if (estNouvelle && !t.titre) {
         setTimeout(() => { const el = $('#tcTitre', panneau); if (el) el.focus(); }, 60);
@@ -1356,29 +1700,53 @@
       construireContenu(panneau);
 
       panneau.addEventListener('click', async (e) => {
-        const sync = () => {
-          const elTitre = $('#tcTitre', panneau); if (elTitre) t.titre = elTitre.value;
-          const elPh = $('#tcPhase', panneau); if (elPh) t.phaseId = elPh.value;
-          const elDom = $('#tcDomaine', panneau); if (elDom) t.domaine = elDom.value;
-          const elComm = $('#tcComm', panneau); if (elComm) t.commentaire = elComm.value;
-          const elBloc = $('#tcBlocage', panneau); if (elBloc) t.blocage = elBloc.value;
-          const elFaitLe = $('#tcFaitLe', panneau); if (elFaitLe) t.faitLe = elFaitLe.value;
-          $$('[data-tc-leg]', panneau).forEach(inp => {
-            const i = Number(inp.dataset.tcLeg);
-            if (t.photos && t.photos[i]) t.photos[i].legende = inp.value;
-          });
-        };
+        if (gererClicActionPhoto(e, () => { t.photos = t.photos || []; return t.photos; }, 'tc', () => construireContenu(panneau), () => synchroniserChamps(panneau))) {
+          return;
+        }
+
+        const btnPoids = e.target.closest('[data-poids]');
+        if (btnPoids) {
+          synchroniserChamps(panneau);
+          t.poids = Number(btnPoids.dataset.poids) || 1;
+          construireContenu(panneau);
+          return;
+        }
+
+        const btnOrig = e.target.closest('[data-orig]');
+        if (btnOrig) {
+          synchroniserChamps(panneau);
+          t.blocageOrigine = btnOrig.dataset.orig || 'CLIENT';
+          construireContenu(panneau);
+          return;
+        }
+
+        const btnSupHist = e.target.closest('[data-suppr-hist]');
+        if (btnSupHist) {
+          synchroniserChamps(panneau);
+          const hi = Number(btnSupHist.dataset.supprHist);
+          if (t.historiqueBlocages) t.historiqueBlocages.splice(hi, 1);
+          construireContenu(panneau);
+          return;
+        }
 
         const btnSt = e.target.closest('[data-st]');
         if (btnSt) {
-          sync();
+          synchroniserChamps(panneau);
           const nv = btnSt.dataset.st;
+          if (t.statut === 'bloque' && nv !== 'bloque' && (t.blocage || t.bloqueDepuis)) {
+            archiverLeveeBlocage(t, nv === 'fait' ? 'Tâche réalisée' : 'Reprise des travaux');
+            toast('🔓 Trace du blocage conservée dans l\'historique');
+          }
           t.statut = nv;
           if (nv === 'fait') {
             if (!t.faitLe) t.faitLe = C.jourActif || aujourdhuiISO();
             t.progression = 100;
           } else if (nv === 'encours') {
             if (!t.progression || t.progression === 100) t.progression = 50;
+          } else if (nv === 'bloque') {
+            if (!t.blocageOrigine) t.blocageOrigine = 'CLIENT';
+            if (!t.bloqueDepuis) t.bloqueDepuis = C.jourActif || aujourdhuiISO();
+            t.progression = 0;
           } else {
             t.progression = 0;
           }
@@ -1388,7 +1756,7 @@
 
         const btnProg = e.target.closest('[data-prog]');
         if (btnProg) {
-          sync();
+          synchroniserChamps(panneau);
           t.progression = Number(btnProg.dataset.prog);
           construireContenu(panneau);
           return;
@@ -1405,18 +1773,19 @@
         if (!act) return;
         const nomAct = act.dataset.act;
 
-        if (nomAct === 'annoter-tc-photo') {
-          sync();
-          const idx = Number(act.dataset.idx);
-          const ph = t.photos && t.photos[idx];
-          if (ph && typeof Annotation !== 'undefined') {
-            Annotation.ouvrir(ph, { fin: () => construireContenu(panneau) });
-          }
-        } else if (nomAct === 'suppr-tc-photo') {
-          sync();
-          const idx = Number(act.dataset.idx);
-          if (t.photos) t.photos.splice(idx, 1);
+        if (nomAct === 'lever-blocage') {
+          synchroniserChamps(panneau);
+          const noteRes = await Dialogue.saisir(
+            'Précision éventuelle sur la levée du blocage (facultatif) :',
+            '',
+            'Ex. Alimentation 400V rétablie par le client à 10h30'
+          );
+          if (noteRes === null) return;
+          archiverLeveeBlocage(t, noteRes);
+          t.statut = 'encours';
+          if (!t.progression) t.progression = 50;
           construireContenu(panneau);
+          toast('🔓 Point bloquant levé et archivé');
         } else if (nomAct === 'supprimer-tache') {
           if (await Dialogue.confirmer('Supprimer définitivement cette tâche de la liste ?', { ok: 'Supprimer', danger: true })) {
             C.taches = (C.taches || []).filter(x => x.id !== t.id);
@@ -1426,7 +1795,7 @@
             toast('Tâche supprimée');
           }
         } else if (nomAct === 'enregistrer-tache') {
-          sync();
+          synchroniserChamps(panneau);
           if (!t.titre.trim()) {
             toast('Indiquez l\'intitulé de la tâche');
             const elT = $('#tcTitre', panneau); if (elT) elT.focus();
@@ -1567,8 +1936,8 @@
 
         ${onglet === 'texte' ? `
           <div class="card" style="margin-bottom:10px">
-            <p class="hint" style="margin-top:0">Collez votre liste (depuis un mail, Word, Notes ou WhatsApp). Astuce : une ligne finissant par <strong>:</strong> ou précédée de <strong>#</strong> crée automatiquement une Phase/Lot !</p>
-            <textarea id="txtImportColler" rows="8" placeholder="# 1. Montage mécanique\n- Mise en place et alignement châssis\n- Chevillage au sol\n\n# 2. Câblage & Automatisme\n- Raccordement 400V\n- Test chaîne des arrêts d'urgence" style="width:100%;font-size:13.5px"></textarea>
+            <p class="hint" style="margin-top:0">Collez votre liste (depuis un mail, Word, Notes ou WhatsApp). Astuce : une ligne finissant par <strong>:</strong> ou précédée de <strong>#</strong> crée une Phase/Lot, et <strong>[x2]</strong> / <strong>[x3]</strong> définit la pondération !</p>
+            <textarea id="txtImportColler" rows="8" placeholder="# 1. Montage mécanique\n- Mise en place et alignement châssis [x3]\n- Chevillage au sol [x2]\n\n# 2. Câblage & Automatisme\n- Raccordement 400V [x2]\n- Test chaîne des arrêts d'urgence [x3]" style="width:100%;font-size:13.5px"></textarea>
             <div style="margin-top:8px;display:flex;align-items:center;gap:8px">
               <input type="checkbox" id="chkRemplacerTxt" ${(C.taches || []).length === 0 || C.estDemo ? 'checked' : ''}>
               <label for="chkRemplacerTxt" style="font-size:13px">Remplacer la liste actuelle (${(C.taches || []).length} tâche${(C.taches || []).length > 1 ? 's' : ''})</label>
@@ -2745,6 +3114,16 @@
     document.addEventListener('click', (e) => {
       // Ignorer les clics déjà dans une feuille modale
       if (e.target.closest('.sheet') || e.target.closest('.annot-editeur') || e.target.closest('.dlg-fond')) return;
+
+      // Actions sur les photos du journal quotidien (Client/Mémo BFR, Avant/Après, Annoter, Supprimer)
+      if (gererClicActionPhoto(
+        e,
+        () => { const jour = assurerJour(C.jourActif); jour.photos = jour.photos || []; return jour.photos; },
+        'jour',
+        () => rendreTout()
+      )) {
+        return;
+      }
 
       const btnJourNav = e.target.closest('[data-jour-aller]');
       if (btnJourNav) {

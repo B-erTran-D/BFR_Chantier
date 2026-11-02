@@ -47,6 +47,14 @@
     return 'afaire';
   }
 
+  function normaliserPoids(val) {
+    const s = String(val == null ? '' : val).trim();
+    if (!s) return 1;
+    if (/3|gros|lourd|fort|majeur|eleve|élevé/i.test(s)) return 3;
+    if (/2|moyen|important/i.test(s)) return 2;
+    return 1;
+  }
+
   /* ===================== 1. Analyse de texte libre ====================== */
   function analyserTexte(texte) {
     const lignes = String(texte || '').replace(/\r/g, '').split('\n');
@@ -119,17 +127,34 @@
         domaine = devinerDomaine(l);
       }
 
+      // Pondération optionnelle : [x2], [x3], (x2), (x3), ×2, ×3 en début ou fin de ligne
+      let poids = 1;
+      const mPoidsDebut = /^[\[(]\s*[x×*]\s*([123])\s*[\])]\s*(.+)$/i.exec(l);
+      const mPoidsFin = /^(.+?)\s*[\[(]\s*[x×*]\s*([123])\s*[\])]$/i.exec(l);
+      if (mPoidsDebut) {
+        poids = Number(mPoidsDebut[1]) || 1;
+        l = mPoidsDebut[2].trim();
+      } else if (mPoidsFin) {
+        poids = Number(mPoidsFin[2]) || 1;
+        l = mPoidsFin[1].trim();
+      }
+
       const ph = phaseCourante || obtenirPhase('Tâches du chantier');
       taches.push({
         id: uid('tc'),
         phaseId: ph.id,
         titre: l,
         domaine: domaine,
+        poids: poids,
         statut: statut,
         progression: statut === 'fait' ? 100 : (statut === 'encours' ? 50 : 0),
         faitLe: '',
         commentaire: '',
         blocage: '',
+        blocageOrigine: statut === 'bloque' ? 'CLIENT' : '',
+        bloqueDepuis: '',
+        blocageDuree: '',
+        historiqueBlocages: [],
         photos: []
       });
     });
@@ -185,12 +210,13 @@
       phase: ['PHASE', 'PHASES', 'LOT', 'LOTS', 'ZONE', 'ZONES', 'CATEGORIE', 'SECTION', 'ETAPE', 'MACHINE'],
       titre: ['TACHE', 'TACHES', 'INTITULE', 'DESIGNATION', 'DESCRIPTION', 'LIBELLE', 'ACTION', 'TRAVAUX', 'POINT', 'ELEMENT'],
       domaine: ['DOMAINE', 'METIER', 'SPECIALITE', 'TYPE'],
+      poids: ['POIDS', 'COEFF', 'COEFFICIENT', 'IMPORTANCE', 'CHARGE'],
       statut: ['STATUT', 'ETAT', 'AVANCEMENT', 'FAIT', 'REALISE'],
       commentaire: ['COMMENTAIRE', 'COMMENTAIRES', 'NOTE', 'NOTES', 'OBSERVATION', 'OBSERVATIONS', 'REMARQUE'],
       blocage: ['BLOCAGE', 'RESERVE', 'RESERVES', 'POINTBLOQUANT', 'ALERTE']
     };
 
-    let mapCol = { phase: 0, titre: 1, domaine: 2, statut: 3, commentaire: 4, blocage: 5 };
+    let mapCol = { phase: 0, titre: 1, domaine: 2, poids: -1, statut: 3, commentaire: 4, blocage: 5 };
     let idxEntete = -1;
 
     for (let k = 0; k < Math.min(lignes.length, 8); k++) {
@@ -252,19 +278,26 @@
       const ph = obtenirPhase(dernierePhaseNom);
       const statut = normaliserStatut(lireCol(row, mapCol.statut));
       const dom = normaliserDomaine(lireCol(row, mapCol.domaine), titre);
+      const poids = normaliserPoids(lireCol(row, mapCol.poids));
       const comm = lireCol(row, mapCol.commentaire);
       const bloc = lireCol(row, mapCol.blocage);
+      const stFinal = bloc && statut === 'afaire' ? 'bloque' : statut;
 
       taches.push({
         id: uid('tc'),
         phaseId: ph.id,
         titre: titre,
         domaine: dom,
-        statut: bloc && statut === 'afaire' ? 'bloque' : statut,
-        progression: statut === 'fait' ? 100 : (statut === 'encours' ? 50 : 0),
+        poids: poids,
+        statut: stFinal,
+        progression: stFinal === 'fait' ? 100 : (stFinal === 'encours' ? 50 : 0),
         faitLe: '',
         commentaire: comm,
         blocage: bloc,
+        blocageOrigine: stFinal === 'bloque' ? 'CLIENT' : '',
+        bloqueDepuis: '',
+        blocageDuree: '',
+        historiqueBlocages: [],
         photos: []
       });
     });
@@ -531,16 +564,16 @@
   /* ===================== 5. Modèle CSV téléchargeable =================== */
   function modeleCSV() {
     const lignes = [
-      'Phase;Tâche;Domaine;Statut;Commentaire',
-      '1. Réception & Implantation;Contrôle de la zone d\'implantation et traçage au sol;Mécanique;À faire;',
-      '1. Réception & Implantation;Déchargement et manutention des sous-ensembles en zone;Mécanique;À faire;',
-      '2. Montage mécanique;Assemblage, alignement et mise à niveau des châssis;Mécanique;À faire;',
-      '2. Montage mécanique;Fixation au sol (chevillage chimique) et montage carters;Mécanique;À faire;',
-      '3. Câblage électrique & pneumatique;Raccordement puissance 400V et inter-châssis;Électrique;À faire;',
-      '3. Câblage électrique & pneumatique;Raccordement réseau pneumatique et mise sous pression;Mécanique;À faire;',
-      '4. Automatisme & Sécurités;Test de la chaîne des arrêts d\'urgence et barrières immatérielles;Automatisme;À faire;',
-      '4. Automatisme & Sécurités;Tests E/S capteurs et sens de rotation moteurs;Automatisme;À faire;',
-      '5. Essais & Mise en route;Essais à vide puis montée en cadence avec produits client;Automatisme;À faire;'
+      'Phase;Tâche;Domaine;Poids;Statut;Commentaire',
+      '1. Réception & Implantation;Contrôle de la zone d\'implantation et traçage au sol;Mécanique;1;À faire;',
+      '1. Réception & Implantation;Déchargement et manutention des sous-ensembles en zone;Mécanique;2;À faire;',
+      '2. Montage mécanique;Assemblage, alignement et mise à niveau des châssis;Mécanique;3;À faire;',
+      '2. Montage mécanique;Fixation au sol (chevillage chimique) et montage carters;Mécanique;2;À faire;',
+      '3. Câblage électrique & pneumatique;Raccordement puissance 400V et inter-châssis;Électrique;3;À faire;',
+      '3. Câblage électrique & pneumatique;Raccordement réseau pneumatique et mise sous pression;Mécanique;1;À faire;',
+      '4. Automatisme & Sécurités;Test de la chaîne des arrêts d\'urgence et barrières immatérielles;Automatisme;2;À faire;',
+      '4. Automatisme & Sécurités;Tests E/S capteurs et sens de rotation moteurs;Automatisme;2;À faire;',
+      '5. Essais & Mise en route;Essais à vide puis montée en cadence avec produits client;Automatisme;3;À faire;'
     ];
     return new Blob(['\uFEFF' + lignes.join('\r\n')], { type: 'text/csv;charset=utf-8' });
   }
@@ -550,56 +583,56 @@
     {
       id: 'installation_ligne',
       nom: 'Installation & Mise en service ligne BFR',
-      description: '20 tâches réparties en 5 phases : Implantation, Mécanique, Élec/Pneuma, Automatisme/Sécurité, Essais.',
+      description: '20 tâches pondérées (×1 à ×3) en 5 phases : Implantation, Mécanique, Élec/Pneuma, Automatisme, Essais.',
       texte: [
         '# 1. Réception & Implantation',
-        '- [Méca] Accueil sécurité site, permis de travail et balisage de la zone chantier',
-        '- [Méca] Réception des camions, contrôle des colis et déchargement des modules',
-        '- [Méca] Vérification du traçage au sol et des côtes d\'implantation ligne',
-        '- [Méca] Mise en place des châssis et convoyeurs selon plan d\'implantation BFR',
+        '- [Méca] Accueil sécurité site, permis de travail et balisage de la zone chantier (x1)',
+        '- [Méca] Réception des camions, contrôle des colis et déchargement des modules (x2)',
+        '- [Méca] Vérification du traçage au sol et des côtes d\'implantation ligne (x1)',
+        '- [Méca] Mise en place des châssis et convoyeurs selon plan d\'implantation BFR (x2)',
         '# 2. Montage mécanique',
-        '- [Méca] Assemblage mécanique inter-modules et jonctions convoyeurs',
-        '- [Méca] Réglage des hauteurs, niveaux laser et alignement général de la ligne',
-        '- [Méca] Ancrage / chevillage définitif au sol après validation alignement',
-        '- [Méca] Montage des carters de protection, portes d\'accès et guides produits',
+        '- [Méca] Assemblage mécanique inter-modules et jonctions convoyeurs (x3)',
+        '- [Méca] Réglage des hauteurs, niveaux laser et alignement général de la ligne (x2)',
+        '- [Méca] Ancrage / chevillage définitif au sol après validation alignement (x2)',
+        '- [Méca] Montage des carters de protection, portes d\'accès et guides produits (x2)',
         '# 3. Câblage électrique & pneumatique',
-        '- [Élec] Passage des chemins de câbles et liaisons inter-armoires',
-        '- [Élec] Raccordement des capteurs, cellules, moteurs et variateurs déportés',
-        '- [Méca] Raccordement alimentation air comprimé et test d\'étanchéité pneumatique',
-        '- [Élec] Raccordement alimentation générale 400V + Terre et vérifications hors tension',
+        '- [Élec] Passage des chemins de câbles et liaisons inter-armoires (x2)',
+        '- [Élec] Raccordement des capteurs, cellules, moteurs et variateurs déportés (x3)',
+        '- [Méca] Raccordement alimentation air comprimé et test d\'étanchéité pneumatique (x1)',
+        '- [Élec] Raccordement alimentation générale 400V + Terre et vérifications hors tension (x2)',
         '# 4. Automatisme, Robotique & Sécurités',
-        '- [Auto] Mise sous tension 24V DC, chargement / vérification programmes API & IHM',
-        '- [Auto] Validation complète de la chaîne de sécurité (AU, portes, barrières immatérielles)',
-        '- [Auto] Pointage des entrées/sorties (E/S) et contrôle des sens de rotation moteurs',
-        '- [Auto] Apprentissage des trajectoires / points de prise et dépose',
+        '- [Auto] Mise sous tension 24V DC, chargement / vérification programmes API & IHM (x2)',
+        '- [Auto] Validation complète de la chaîne de sécurité (AU, portes, barrières immatérielles) (x2)',
+        '- [Auto] Pointage des entrées/sorties (E/S) et contrôle des sens de rotation moteurs (x2)',
+        '- [Auto] Apprentissage des trajectoires / points de prise et dépose (x3)',
         '# 5. Essais produits & Mise en production',
-        '- [Auto] Essais de fonctionnement à vide en mode manuel puis cycle automatique',
-        '- [Auto] Passage des premiers produits client et ajustement des formats / guides',
-        '- [Auto] Montée en cadence nominale et suivi fiabilité en production',
-        '- [Méca] Nettoyage complet de la zone chantier, rangement outillage et point final client'
+        '- [Auto] Essais de fonctionnement à vide en mode manuel puis cycle automatique (x2)',
+        '- [Auto] Passage des premiers produits client et ajustement des formats / guides (x3)',
+        '- [Auto] Montée en cadence nominale et suivi fiabilité en production (x3)',
+        '- [Méca] Nettoyage complet de la zone chantier, rangement outillage et point final client (x1)'
       ].join('\n')
     },
     {
       id: 'retrofit_machine',
       nom: 'Rétrofit / Modification machine sur site',
-      description: '12 tâches en 4 phases : Consignation, Démontage & Mécanique, Intégration Élec/Auto, Remise en route.',
+      description: '12 tâches pondérées en 4 phases : Consignation, Démontage & Mécanique, Intégration Élec/Auto, Remise en route.',
       texte: [
         '# 1. Consignation & Préparation',
-        '- [Élec] Consignation électrique et pneumatique (LOTO) avec le référent client',
-        '- [Auto] Sauvegarde complète des programmes API, IHM et paramètres variateurs existants',
-        '- [Méca] Repérage et démontage des sous-ensembles à remplacer',
+        '- [Élec] Consignation électrique et pneumatique (LOTO) avec le référent client (x1)',
+        '- [Auto] Sauvegarde complète des programmes API, IHM et paramètres variateurs existants (x1)',
+        '- [Méca] Repérage et démontage des sous-ensembles à remplacer (x2)',
         '# 2. Adaptation mécanique',
-        '- [Méca] Montage des nouveaux sous-ensembles mécaniques BFR',
-        '- [Méca] Ajustement, alignement et contrôle des jeux fonctionnels',
-        '- [Méca] Remontage des protecteurs et adaptation carterisation',
+        '- [Méca] Montage des nouveaux sous-ensembles mécaniques BFR (x3)',
+        '- [Méca] Ajustement, alignement et contrôle des jeux fonctionnels (x2)',
+        '- [Méca] Remontage des protecteurs et adaptation carterisation (x1)',
         '# 3. Câblage & Automatisme',
-        '- [Élec] Câblage des nouveaux actionneurs / capteurs dans l\'armoire existante',
-        '- [Auto] Mise à jour du programme automate et des écrans IHM',
-        '- [Auto] Contrôle des sécurités machine et test E/S point à point',
+        '- [Élec] Câblage des nouveaux actionneurs / capteurs dans l\'armoire existante (x3)',
+        '- [Auto] Mise à jour du programme automate et des écrans IHM (x2)',
+        '- [Auto] Contrôle des sécurités machine et test E/S point à point (x2)',
         '# 4. Essais & Remise en service',
-        '- [Auto] Déconsignation, essais à vide et validation des nouveaux cycles',
-        '- [Auto] Essais en production avec les opérateurs et validation des cadences',
-        '- [Méca] Remise au propre de la zone et restitution au service production'
+        '- [Auto] Déconsignation, essais à vide et validation des nouveaux cycles (x2)',
+        '- [Auto] Essais en production avec les opérateurs et validation des cadences (x3)',
+        '- [Méca] Remise au propre de la zone et restitution au service production (x1)'
       ].join('\n')
     },
     {
