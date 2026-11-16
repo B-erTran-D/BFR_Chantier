@@ -45,6 +45,27 @@
     TIERS:  { libelle: 'Tiers / Fourn.',    court: 'TIERS / FOURN.', couleur: '#b45309' }
   };
 
+  /* Rôles technicien BFR autorisés (affichés tels quels sur les rapports) */
+  const ROLES_TECHNICIEN = ['Metteur au point', 'Automaticien', 'Électrotechnicien'];
+
+  function roleTechnicien(chantier, reglages) {
+    const c = chantier || {};
+    const s = reglages || {};
+    const t = s.technicien || {};
+    const brut = valeur(c.technicienRole) || valeur(t.fonction);
+    if (!brut) return '';
+    // Normalisation : on ne conserve que les 3 rôles officiels (anciens libellés ignorés)
+    const trouve = ROLES_TECHNICIEN.find(r => r.toLowerCase() === brut.toLowerCase());
+    return trouve || '';
+  }
+
+  function nomTechnicien(chantier, reglages) {
+    const c = chantier || {};
+    const s = reglages || {};
+    const t = s.technicien || {};
+    return valeur(c.responsable) || nomComplet(t) || 'Équipe BFR Systems';
+  }
+
   function poidsTache(t) {
     const p = Number(t && t.poids);
     return (p === 2 || p === 3) ? p : 1;
@@ -147,6 +168,35 @@
     const prenom = valeur(t.prenom), nom = valeur(t.nom);
     if (prenom && nom) return prenom + ' ' + nom.toUpperCase();
     return prenom || nom;
+  }
+
+  /* ===================== Machines de l'intervention ================== */
+  /** Liste normalisée des machines du chantier (au moins 1 pour la rétrocompatibilité). */
+  function machinesChantier(chantier) {
+    const c = chantier || {};
+    const liste = Array.isArray(c.machines) ? c.machines.filter(m => m && (m.id || m.nom)) : [];
+    if (!liste.length) {
+      return [{ id: 'defaut', nom: 'Machine 1', ref: '' }];
+    }
+    return liste.map((m, i) => ({
+      id: m.id || ('mc_' + i),
+      nom: valeur(m.nom) || ('Machine ' + (i + 1)),
+      ref: valeur(m.ref)
+    }));
+  }
+
+  /** Identifiant machine effectif d'une tâche (les anciennes tâches sans machineId vont sur la 1re machine). */
+  function machineIdTache(tache, chantier) {
+    const machines = machinesChantier(chantier);
+    const id = tache && tache.machineId ? String(tache.machineId) : '';
+    if (id && machines.some(m => m.id === id)) return id;
+    return machines[0].id;
+  }
+
+  function nomMachine(chantier, machineId) {
+    const machines = machinesChantier(chantier);
+    const m = machines.find(x => x.id === machineId);
+    return m ? m.nom : (machines[0] ? machines[0].nom : 'Machine 1');
   }
 
   function lignesPiedPage(s) {
@@ -324,6 +374,30 @@
     phases.forEach(p => { mapPhase[p.id] = p.nom; });
     const nomPhase = (t) => mapPhase[t.phaseId] || phases[0].nom || 'Chantier';
 
+    // Machines de l'intervention (chaque machine a ses propres tâches)
+    const machines = machinesChantier(c);
+    const mapMachine = {};
+    machines.forEach(m => { mapMachine[m.id] = m.nom; });
+    const nomMachineFn = (t) => mapMachine[machineIdTache(t, c)] || machines[0].nom;
+    const parMachine = machines.map(m => {
+      const ts = taches.filter(t => machineIdTache(t, c) === m.id);
+      const pTot = ts.reduce((s, t) => s + poidsTache(t), 0);
+      const pAcq = ts.reduce((s, t) => s + acquisTache(t), 0);
+      return {
+        id: m.id,
+        nom: m.nom,
+        ref: m.ref || '',
+        taches: ts,
+        total: ts.length,
+        fait: ts.filter(t => t.statut === 'fait').length,
+        encours: ts.filter(t => t.statut === 'encours').length,
+        bloque: ts.filter(t => t.statut === 'bloque').length,
+        afaire: ts.filter(t => !t.statut || t.statut === 'afaire').length,
+        faitCeJour: ts.filter(t => t.statut === 'fait' && t.faitLe === d).length,
+        pct: pTot ? Math.round((pAcq / pTot) * 100) : 0
+      };
+    });
+
     const faitTotal = taches.filter(t => t.statut === 'fait');
     const faitCeJour = faitTotal.filter(t => t.faitLe === d);
     const faitAvant = faitTotal.filter(t => t.faitLe !== d);
@@ -418,7 +492,7 @@
     taches.forEach(t => {
       (t.historiqueBlocages || []).forEach(h => {
         if (!h) return;
-        const item = { tache: t, phaseNom: nomPhase(t), hist: h };
+        const item = { tache: t, phaseNom: nomPhase(t), machineNom: nomMachineFn(t), hist: h };
         blocagesLevesTotal.push(item);
         if (h.leveLe === d) blocagesLevesCeJour.push(item);
       });
@@ -471,6 +545,9 @@
       pctGlobal: pctGlobal,
       parPhase: parPhase,
       nomPhase: nomPhase,
+      machines: machines,
+      parMachine: parMachine,
+      nomMachine: nomMachineFn,
       nbPhotosJour: nbPhotosJour,
       nbPhotosInterne: nbPhotosInterne
     };
@@ -563,15 +640,16 @@
         p.y += 20;
       }
 
-      // Bandeau compact « Votre contact BFR Systems » sur 2 colonnes équilibrées
+      // Bandeau compact « Technicien BFR Systems » : nom + prénom + rôle uniquement
       const t = s.technicien || {};
-      const respNom = valeur(c.responsable) || nomComplet(t) || 'Équipe BFR Systems';
-      const respCoord = [valeur(t.fonction) || 'Chargé de chantier BFR', valeur(t.tel) ? 'Tél. ' + valeur(t.tel) : '', valeur(t.email)].filter(Boolean).join('  ·  ');
+      const respNom = nomTechnicien(c, s);
+      const roleTech = roleTechnicien(c, s);
+      const respCoord = [roleTech, valeur(t.tel) ? 'Tél. ' + valeur(t.tel) : '', valeur(t.email)].filter(Boolean).join('  ·  ');
       const equipeTxt = valeur(b.jour.equipeJour) || valeur(c.equipe);
       const hContact = equipeTxt ? 44 : 32;
       p.rect(this.M, p.y, this.CW, hContact, { fill: C.bandeau, stroke: C.bord, lineWidth: 0.6 });
       p.rect(this.M, p.y, 3.5, hContact, { fill: CYAN });
-      p.text('VOTRE INTERLOCUTEUR CHANTIER BFR SYSTEMS :', this.M + 10, p.y + 11, { size: 7.6, font: 'F2', color: C.gris, bold: true });
+      p.text('TECHNICIEN BFR SYSTEMS :', this.M + 10, p.y + 11, { size: 7.6, font: 'F2', color: C.gris, bold: true });
       p.text(Pdf.trunc(respNom + (respCoord ? '  —  ' + respCoord : ''), this.CW - 18, 9.6, true), this.M + 10, p.y + 23.5, { size: 9.6, font: 'F2', color: C.texte, bold: true });
       if (equipeTxt) {
         p.text(Pdf.trunc('Équipe présente sur site : ' + equipeTxt + (valeur(b.jour.horaires) ? '  |  Horaires : ' + valeur(b.jour.horaires) : ''), this.CW - 18, 8.8),
@@ -737,6 +815,48 @@
         p.text(Pdf.trunc(k.lib, caseW - 6, 7.5), x + caseW / 2, yKpi + 28, { size: 7.5, color: C.gris, align: 'center' });
       });
       p.y = yKpi + 42;
+
+      // 2b. Avancement par machine (si plusieurs machines sur l'intervention)
+      const machinesActives = (b.parMachine || []).filter(m => m.total > 0);
+      if (machinesActives.length > 1) {
+        const hEntM = 18, hRowM = 20;
+        this.saut(hEntM + hRowM * Math.min(2, machinesActives.length) + 8);
+        const colNomM = Math.round(this.CW * 0.48);
+        const colBarreM = Math.round(this.CW * 0.28);
+        const colStatM = this.CW - colNomM - colBarreM;
+        const dessinerEnteteMachines = () => {
+          const y = p.y;
+          p.rect(this.M, y, this.CW, hEntM, { fill: C.cyanClair, stroke: C.bordFort, lineWidth: 0.5 });
+          p.text('Machine de l\'intervention', this.M + 7, y + 12.2, { size: 8.5, font: 'F2', color: C.navy, bold: true });
+          p.text('Progression', this.M + colNomM + 7, y + 12.2, { size: 8.5, font: 'F2', color: C.navy, bold: true });
+          p.text('État', this.M + colNomM + colBarreM + colStatM - 7, y + 12.2, { size: 8.5, font: 'F2', color: C.navy, align: 'right', bold: true });
+          p.y = y + hEntM;
+        };
+        dessinerEnteteMachines();
+        machinesActives.forEach(m => {
+          if (p.y + hRowM > this.limiteBas()) {
+            p.newPage();
+            this.enteteSuite();
+            dessinerEnteteMachines();
+          }
+          const y = p.y;
+          p.rect(this.M, y, this.CW, hRowM, { fill: [1, 1, 1], stroke: C.bord, lineWidth: 0.4 });
+          p.text(Pdf.trunc(m.nom, colNomM - 14, 9.0, true), this.M + 7, y + 13.2, { size: 9.0, font: 'F2', color: C.texte, bold: true });
+          const bx = this.M + colNomM + 7, by = y + 6.5, bw = colBarreM - 46, bh = 7;
+          p.rect(bx, by, bw, bh, { fill: [0.92, 0.94, 0.96], stroke: C.bord, lineWidth: 0.3 });
+          if (m.pct > 0) {
+            p.rect(bx, by, Math.max(2, (bw * m.pct) / 100), bh, { fill: m.pct >= 100 ? hexRgb('#15803d') : CYAN });
+          }
+          p.text(m.pct + ' %', bx + bw + 6, y + 13, { size: 8.4, font: 'F2', color: m.pct >= 100 ? hexRgb('#15803d') : C.navy, bold: true });
+          let resumeM = m.fait + '/' + m.total + ' fait';
+          if (m.bloque) resumeM += ' · ' + m.bloque + ' bloq.';
+          else if (m.faitCeJour) resumeM += ' (+' + m.faitCeJour + ' auj.)';
+          p.text(Pdf.trunc(resumeM, colStatM - 10, 8.3), this.W - this.M - 7, y + 13,
+            { size: 8.3, color: m.bloque ? hexRgb('#b91c1c') : C.gris, align: 'right' });
+          p.y = y + hRowM;
+        });
+        p.y += 8;
+      }
 
       // 3. Tableau d'avancement par Phase / Lot (s'il y a au moins 1 tâche)
       const phasesActives = b.parPhase.filter(ph => ph.total > 0);
@@ -949,7 +1069,8 @@
       p.rect(this.M, y0, this.CW, 16, { fill: fond });
       p.rect(this.M, y0, 3.8, hCarte, { fill: coul });
 
-      const metaGauche = phNom + (domNom ? '  ·  ' + domNom : '');
+      const mcNom = b.nomMachine ? b.nomMachine(t) : '';
+      const metaGauche = ((b.machines && b.machines.length > 1 && mcNom) ? (mcNom + '  ·  ') : '') + phNom + (domNom ? '  ·  ' + domNom : '');
       p.text(Pdf.trunc(metaGauche, this.CW * 0.58, 8.3, true), this.M + 9, y0 + 11.2, { size: 8.3, font: 'F2', color: coul, bold: true });
 
       let badgeDroite = st.court;
@@ -1006,7 +1127,7 @@
       p.rect(this.M, y0, this.CW, 16, { fill: fond });
       p.rect(this.M, y0, 3.8, hCarte, { fill: coul });
 
-      p.text(Pdf.trunc(item.phaseNom + '  ·  ' + orig.libelle, this.CW * 0.62, 8.2, true), this.M + 9, y0 + 11.2, { size: 8.2, font: 'F2', color: coul, bold: true });
+      p.text(Pdf.trunc(((item.machineNom ? item.machineNom + '  ·  ' : '') + item.phaseNom + '  ·  ' + orig.libelle), this.CW * 0.62, 8.2, true), this.M + 9, y0 + 11.2, { size: 8.2, font: 'F2', color: coul, bold: true });
       p.text('POINT BLOQUANT LEVE CE JOUR', this.W - this.M - 8, y0 + 11.2, { size: 7.8, font: 'F2', color: coul, align: 'right', bold: true });
 
       let yc = y0 + 27.5;
@@ -1024,7 +1145,7 @@
       p.y = y0 + hCarte + 5;
     }
 
-    /* Tableau synthétique complet de toutes les tâches du chantier */
+    /* Tableau synthétique complet de toutes les tâches du chantier (groupé par machine puis par phase) */
     blocChecklistComplete() {
       const p = this.pdf, C = this.C, b = this.bilan;
       const phasesNonVides = b.parPhase.filter(ph => ph.taches.length > 0);
@@ -1048,7 +1169,38 @@
 
       tracerEntete();
 
-      phasesNonVides.forEach(ph => {
+      const machinesActives = (b.parMachine || []).filter(m => m.total > 0);
+      const multiMachines = machinesActives.length > 1;
+      const ordreMachines = multiMachines ? machinesActives : [null];
+
+      ordreMachines.forEach(mc => {
+        if (multiMachines) {
+          if (p.y + 36 > this.limiteBas()) {
+            p.newPage();
+            this.enteteSuite();
+            tracerEntete();
+          }
+          const ym = p.y;
+          p.rect(this.M, ym, this.CW, 18, { fill: CYAN, stroke: C.bordFort, lineWidth: 0.5 });
+          p.text(Pdf.trunc(mc.nom, this.CW * 0.72, 9.2, true), this.M + 6, ym + 12.4, { size: 9.2, font: 'F2', color: C.blanc, bold: true });
+          p.text(mc.fait + '/' + mc.total + ' (' + mc.pct + ' %)', this.W - this.M - 6, ym + 12.4, { size: 8.4, font: 'F2', color: C.blanc, align: 'right' });
+          p.y = ym + 18;
+        }
+        const phasesPourMachine = phasesNonVides.map(ph => ({
+          id: ph.id,
+          nom: ph.nom,
+          taches: ph.taches.filter(t => !mc || machineIdTache(t, this.c) === mc.id)
+        })).filter(ph => ph.taches.length > 0);
+        // Recalcul des compteurs par phase pour cette machine
+        phasesPourMachine.forEach(ph => {
+          const pTot = ph.taches.reduce((s, t) => s + poidsTache(t), 0);
+          const pAcq = ph.taches.reduce((s, t) => s + acquisTache(t), 0);
+          ph.total = ph.taches.length;
+          ph.fait = ph.taches.filter(t => t.statut === 'fait').length;
+          ph.pct = pTot ? Math.round((pAcq / pTot) * 100) : 0;
+        });
+
+        phasesPourMachine.forEach(ph => {
         if (p.y + 36 > this.limiteBas()) {
           p.newPage();
           this.enteteSuite();
@@ -1093,6 +1245,7 @@
 
           p.y = y + hRow;
         });
+        });
       });
       p.y += 8;
     }
@@ -1121,6 +1274,7 @@
       this.kv([
         ['Chantier / Projet', valeur(c.nom) || '—', !valeur(c.equipement)],
         ['Équipement / Ligne', valeur(c.equipement)],
+        ['Machines de l\'intervention', (b.machines || []).map(m => m.nom).join(' · ') || '—'],
         ['N° d\'affaire', valeur(c.affaire)],
         ['Dates prévisionnelles', [frDate(c.dateDebut), frDate(c.dateFinPrevue)].filter(Boolean).join(' au ')],
         ['Lieu d\'intervention', valeur(c.client && c.client.lieu) || valeur(c.client && c.client.adresse)]
@@ -1237,11 +1391,18 @@
     }
 
     const t = s.technicien || {};
-    const respNom = valeur(c.responsable) || nomComplet(t) || 'Équipe BFR Systems';
+    const respNom = nomTechnicien(c, s);
+    const roleTech = roleTechnicien(c, s);
     doc.para([
-      { t: 'Interlocuteur BFR Systems : ', gras: true, couleur: '332E72' },
-      { t: respNom + (valeur(t.tel) ? ' · Tél. ' + valeur(t.tel) : '') + (valeur(t.email) ? ' · ' + valeur(t.email) : '') }
+      { t: 'Technicien BFR Systems : ', gras: true, couleur: '332E72' },
+      { t: respNom + (roleTech ? ' — ' + roleTech : '') + (valeur(t.tel) ? ' · Tél. ' + valeur(t.tel) : '') + (valeur(t.email) ? ' · ' + valeur(t.email) : '') }
     ], { encadre: true, apres: 180 });
+    if ((b.machines || []).length) {
+      doc.para([
+        { t: 'Machines de l\'intervention : ', gras: true, couleur: '332E72' },
+        { t: b.machines.map(m => m.nom).join(' · ') }
+      ], { apres: 140 });
+    }
 
     let numSec = 1;
     doc.bandeau((numSec++) + '. SYNTHÈSE & AVANCEMENT GLOBAL', '06BAF2', b.pctGlobal + ' % (' + b.faitTotal.length + '/' + b.total + ')');
@@ -1296,8 +1457,9 @@
       if (valeur(b.jour.aleas)) doc.para(b.jour.aleas, { couleur: '991B1B', gras: true, apres: 100 });
       for (const tc of b.bloques) {
         const orig = ORIGINES_BLOCAGE[tc.blocageOrigine || 'CLIENT'] || ORIGINES_BLOCAGE.CLIENT;
+        const prefMc = (b.machines && b.machines.length > 1) ? (b.nomMachine(tc) + ' · ') : '';
         doc.para([
-          { t: '[' + orig.libelle + ' · ' + b.nomPhase(tc) + '] ', gras: true, couleur: 'B91C1C' },
+          { t: '[' + orig.libelle + ' · ' + prefMc + b.nomPhase(tc) + '] ', gras: true, couleur: 'B91C1C' },
           { t: tc.titre, gras: true }
         ], { apres: 30 });
         const detBloq = [
@@ -1328,8 +1490,9 @@
     if (b.faitCeJour.length) {
       for (const tc of b.faitCeJour) {
         const wP = poidsTache(tc);
+        const prefMc = (b.machines && b.machines.length > 1) ? (b.nomMachine(tc) + ' · ') : '';
         doc.para([
-          { t: '✓ [' + b.nomPhase(tc) + '] ', gras: true, couleur: '15803D' },
+          { t: '✓ [' + prefMc + b.nomPhase(tc) + '] ', gras: true, couleur: '15803D' },
           { t: tc.titre + (wP > 1 ? ' (×' + wP + ')' : ''), gras: true }
         ], { apres: 30 });
         if (valeur(tc.commentaire)) doc.para(tc.commentaire, { couleur: '475569', apres: 80 });
@@ -1342,8 +1505,9 @@
     if (b.enCours.length || valeur(b.jour.prevuDemain)) {
       doc.bandeau((numSec++) + '. EN COURS & PROGRAMME PRÉVU DEMAIN', '06BAF2');
       for (const tc of b.enCours) {
+        const prefMc = (b.machines && b.machines.length > 1) ? (b.nomMachine(tc) + ' · ') : '';
         doc.para([
-          { t: '• [' + b.nomPhase(tc) + '] ', gras: true, couleur: 'B45309' },
+          { t: '• [' + prefMc + b.nomPhase(tc) + '] ', gras: true, couleur: 'B45309' },
           { t: tc.titre + (tc.progression ? ' (' + tc.progression + ' %)' : '') },
           tc.commentaire ? { t: ' — ' + tc.commentaire, couleur: '64748B' } : { t: '' }
         ], { apres: 50 });
@@ -1363,21 +1527,26 @@
 
     if ((!s.rapport || s.rapport.inclureChecklist !== false) && b.total > 0) {
       doc.bandeau((numSec++) + '. ÉTAT RÉCAPITULATIF DE LA CHECKLIST', '06BAF2', b.pctGlobal + ' %');
+      const multiMc = (b.machines || []).length > 1;
       const lignesTab = [[
-        { texte: 'Phase / Lot', gras: true, couleur: '332E72', fond: 'EAF8FD' },
-        { texte: 'Tâche', gras: true, couleur: '332E72', fond: 'EAF8FD' },
+        { texte: multiMc ? 'Machine' : 'Phase / Lot', gras: true, couleur: '332E72', fond: 'EAF8FD' },
+        { texte: multiMc ? 'Phase / Lot — Tâche' : 'Tâche', gras: true, couleur: '332E72', fond: 'EAF8FD' },
         { texte: 'Statut', gras: true, align: 'center', couleur: '332E72', fond: 'EAF8FD' },
         { texte: 'Date', gras: true, align: 'center', couleur: '332E72', fond: 'EAF8FD' }
       ]];
-      b.parPhase.forEach(ph => {
-        ph.taches.forEach(tc => {
-          const st = STATUTS[tc.statut] || STATUTS.afaire;
-          lignesTab.push([
-            { texte: ph.nom, taille: 9.5, couleur: '475569' },
-            { texte: tc.titre, taille: 9.5 },
-            { texte: st.court, gras: true, taille: 9, align: 'center', couleur: st.couleur.replace('#', '').toUpperCase() },
-            { texte: tc.statut === 'fait' ? (tc.faitLe === b.dateJour ? 'Ce jour' : frDateCourte(tc.faitLe)) : '—', taille: 9, align: 'center', couleur: '64748B' }
-          ]);
+      const machinesActives = (b.parMachine || []).filter(m => m.total > 0);
+      const ordreMc = multiMc ? machinesActives : [null];
+      ordreMc.forEach(mc => {
+        b.parPhase.forEach(ph => {
+          ph.taches.filter(tc => !mc || machineIdTache(tc, c) === mc.id).forEach(tc => {
+            const st = STATUTS[tc.statut] || STATUTS.afaire;
+            lignesTab.push([
+              { texte: multiMc ? mc.nom : ph.nom, taille: 9.5, couleur: '475569' },
+              { texte: multiMc ? (ph.nom + ' — ' + tc.titre) : tc.titre, taille: 9.5 },
+              { texte: st.court, gras: true, taille: 9, align: 'center', couleur: st.couleur.replace('#', '').toUpperCase() },
+              { texte: tc.statut === 'fait' ? (tc.faitLe === b.dateJour ? 'Ce jour' : frDateCourte(tc.faitLe)) : '—', taille: 9, align: 'center', couleur: '64748B' }
+            ]);
+          });
         });
       });
       doc.tableau(lignesTab, { largeurs: [24, 48, 15, 13] });
@@ -1421,7 +1590,10 @@
     const s = reglages || {};
     const b = calculerBilan(c, dateJour);
     const t = s.technicien || {};
-    const signataire = valeur(c.responsable) || nomComplet(t) || 'Équipe BFR Systems';
+    const signataire = nomTechnicien(c, s);
+    const roleTech = roleTechnicien(c, s);
+    const multiMc = (b.machines || []).length > 1;
+    const prefMc = (tc) => multiMc ? (b.nomMachine(tc) + ' — ') : '';
 
     const lignes = [];
     lignes.push('Bonjour,');
@@ -1431,9 +1603,17 @@
     if (valeur(c.client && c.client.nom)) {
       lignes.push('• Client / Site : ' + valeur(c.client.nom) + (valeur(c.client.lieu) ? ' — ' + valeur(c.client.lieu) : ''));
     }
+    if ((b.machines || []).length) {
+      lignes.push('• Machines : ' + b.machines.map(m => m.nom).join(' · '));
+    }
     lignes.push('• Journée : Jour ' + b.numeroJour + (b.nbJoursTotal > 1 ? ' / ' + b.nbJoursTotal : '') + ' — ' + frDate(b.dateJour));
     lignes.push('• Avancement global : ' + b.pctGlobal + ' % (' + b.faitTotal.length + ' / ' + b.total + ' tâches terminées)' +
       (b.nbJoursTotal > 1 && b.cadence && b.cadence.actif ? ' — ' + b.cadence.libelle + ' (délai J' + b.numeroJour + '/' + b.nbJoursTotal + ' : ' + b.cadence.pctDelai + '%)' : ''));
+    if (multiMc) {
+      (b.parMachine || []).filter(m => m.total > 0).forEach(m => {
+        lignes.push('  - ' + m.nom + ' : ' + m.pct + ' % (' + m.fait + '/' + m.total + ')');
+      });
+    }
     lignes.push('');
 
     if (valeur(b.jour.synthese)) {
@@ -1452,11 +1632,11 @@
           valeur(tc.bloqueDepuis) ? 'depuis le ' + frDateCourte(tc.bloqueDepuis) : '',
           valeur(tc.blocageDuree) ? 'attente ' + valeur(tc.blocageDuree) : ''
         ].filter(Boolean).join(' · ');
-        lignes.push('- [' + orig.libelle.toUpperCase() + ' — ' + b.nomPhase(tc) + '] ' + tc.titre + (details ? ' → ' + details : ''));
+        lignes.push('- [' + orig.libelle.toUpperCase() + ' — ' + prefMc(tc) + b.nomPhase(tc) + '] ' + tc.titre + (details ? ' → ' + details : ''));
       });
       b.blocagesLevesCeJour.forEach(it => {
         const orig = ORIGINES_BLOCAGE[it.hist.origine || 'CLIENT'] || ORIGINES_BLOCAGE.CLIENT;
-        lignes.push('✓ [LEVÉ CE JOUR — ' + orig.libelle + '] ' + it.tache.titre +
+        lignes.push('✓ [LEVÉ CE JOUR — ' + orig.libelle + '] ' + (it.machineNom ? it.machineNom + ' — ' : '') + it.tache.titre +
           (it.hist.debutLe ? ' (bloqué le ' + frDateCourte(it.hist.debutLe) + (valeur(it.hist.duree) ? ', attente ' + valeur(it.hist.duree) : '') + ')' : ''));
       });
       lignes.push('');
@@ -1465,7 +1645,7 @@
     lignes.push('RÉALISÉ CE JOUR (' + b.faitCeJour.length + ') :');
     if (b.faitCeJour.length > 0) {
       b.faitCeJour.forEach(tc => {
-        lignes.push('✓ [' + b.nomPhase(tc) + '] ' + tc.titre + (valeur(tc.commentaire) ? ' (' + valeur(tc.commentaire) + ')' : ''));
+        lignes.push('✓ [' + prefMc(tc) + b.nomPhase(tc) + '] ' + tc.titre + (valeur(tc.commentaire) ? ' (' + valeur(tc.commentaire) + ')' : ''));
       });
     } else {
       lignes.push('- Travaux en cours (aucune tâche clôturée définitivement ce jour).');
@@ -1475,7 +1655,7 @@
     if (b.enCours.length > 0 || valeur(b.jour.prevuDemain)) {
       lignes.push('EN COURS & PRÉVU DEMAIN :');
       b.enCours.forEach(tc => {
-        lignes.push('• [En cours' + (tc.progression ? ' ' + tc.progression + '%' : '') + '] ' + tc.titre);
+        lignes.push('• [En cours' + (tc.progression ? ' ' + tc.progression + '%' : '') + '] ' + prefMc(tc) + tc.titre);
       });
       if (valeur(b.jour.prevuDemain)) {
         lignes.push(valeur(b.jour.prevuDemain));
@@ -1485,7 +1665,7 @@
 
     lignes.push('Cordialement,');
     lignes.push(signataire);
-    lignes.push((valeur(t.fonction) || 'Chantier & Mise en service') + ' — BFR SYSTEMS');
+    lignes.push((roleTech ? roleTech + ' — ' : '') + 'BFR SYSTEMS');
     if (valeur(t.tel)) lignes.push('Tél. : ' + valeur(t.tel));
 
     return lignes.join('\n');
@@ -1495,6 +1675,12 @@
     STATUTS: STATUTS,
     DOMAINES: DOMAINES,
     ORIGINES_BLOCAGE: ORIGINES_BLOCAGE,
+    ROLES_TECHNICIEN: ROLES_TECHNICIEN,
+    roleTechnicien: roleTechnicien,
+    nomTechnicien: nomTechnicien,
+    machinesChantier: machinesChantier,
+    machineIdTache: machineIdTache,
+    nomMachine: nomMachine,
     poidsTache: poidsTache,
     grouperPhotosPourRapport: grouperPhotosPourRapport,
     frDate: frDate,

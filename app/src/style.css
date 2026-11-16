@@ -3841,3 +3841,83 @@ body.mode-rsav .actionbar #btnAjouterPiece { flex: 1 1 100%; }
   padding: 8px;
 }
 
+
+/* =========================================================================
+   MACHINES DE L'INTERVENTION — Sélecteur, cartes et duplication
+   ========================================================================= */
+.machine-bar {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  margin-bottom: 8px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.machine-bar::-webkit-scrollbar { display: none; }
+.machine-chip {
+  border: 1.5px solid var(--bfr-border);
+  background: #fff;
+  color: var(--bfr-text-muted);
+  font-family: var(--font-heading);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 7px 11px;
+  border-radius: 999px;
+  white-space: nowrap;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+.machine-chip .cnt {
+  background: var(--bfr-bg);
+  color: var(--bfr-secondary);
+  border-radius: 999px;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.machine-chip .pct {
+  color: var(--bfr-primary);
+  font-size: 11px;
+}
+.machine-chip.on {
+  background: var(--bfr-secondary);
+  border-color: var(--bfr-secondary);
+  color: #fff;
+}
+.machine-chip.on .cnt { background: rgba(255,255,255,0.22); color: #fff; }
+.machine-chip.on .pct { color: #fff; }
+.machine-chip.ajout {
+  border-style: dashed;
+  border-color: var(--bfr-primary);
+  color: var(--bfr-secondary);
+  background: var(--bfr-primary-light);
+}
+.machine-actions { margin-bottom: 8px; }
+.machine-actions .btn { width: 100%; }
+.tache-tag.machine {
+  background: #eef2ff;
+  color: var(--bfr-secondary);
+  border-color: #c7d2fe;
+  font-weight: 700;
+}
+.machine-carte {
+  background: #fff;
+  border: 1px solid var(--bfr-border);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.machine-num {
+  font-family: var(--font-heading);
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--bfr-secondary);
+  background: var(--bfr-secondary-light);
+  border-radius: 999px;
+  padding: 3px 9px;
+  flex-shrink: 0;
+}

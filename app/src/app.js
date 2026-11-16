@@ -342,7 +342,7 @@
     technicien: {
       prenom: '',
       nom: '',
-      fonction: 'Chargé de chantier / Montage',
+      fonction: 'Automaticien',
       tel: '',
       email: ''
     },
@@ -378,6 +378,14 @@
     const auj = aujourdhuiISO();
     const modele = ImportTaches.depuisModele(opts.modeleId || 'vierge');
     const dests = ((S && S.mail && S.mail.destinatairesDefaut) || []).map(d => Object.assign({}, d, { id: uid('dst'), actif: true }));
+    // Machines de l'intervention : chaque machine possède ses propres tâches
+    let machinesInit = (modele.machines && modele.machines.length)
+      ? modele.machines.map(m => ({ id: m.id || uid('mc'), nom: m.nom || 'Machine', ref: m.ref || '' }))
+      : [{ id: uid('mc'), nom: 'Machine 1', ref: '' }];
+    const mcDefaut = machinesInit[0].id;
+    (modele.taches || []).forEach(tc => {
+      if (!tc.machineId || !machinesInit.some(m => m.id === tc.machineId)) tc.machineId = mcDefaut;
+    });
     return {
       id: uid('ch'),
       estDemo: !!opts.estDemo,
@@ -389,6 +397,8 @@
       inclureWeekEnd: false,
       joursExclus: [],
       responsable: Report.nomComplet(S && S.technicien) || '',
+      technicienRole: (S && S.technicien && S.technicien.fonction) || '',
+      machines: machinesInit,
       equipe: '',
       client: {
         nom: '',
@@ -419,7 +429,8 @@
     ch.affaire = 'AFF-2026-118';
     ch.equipement = 'Cellule d\'encaissage haute cadence + Convoyage amont/aval';
     ch.dateDebut = j1;
-    ch.responsable = Report.nomComplet(S.technicien) || 'Technicien Chantier BFR';
+    ch.responsable = Report.nomComplet(S.technicien) || 'Julien DURAND';
+    ch.technicienRole = (S.technicien && S.technicien.fonction) || 'Automaticien';
     ch.equipe = '2 monteurs-câbleurs BFR';
     ch.client = {
       nom: 'Laiterie du Val d\'Ain',
@@ -443,6 +454,32 @@
     const pad2 = (n) => ('0' + n).slice(-2);
     ch.dateFinPrevue = dFin.getFullYear() + '-' + pad2(dFin.getMonth() + 1) + '-' + pad2(dFin.getDate());
     ch.inclureWeekEnd = true;
+
+    // Démonstration multi-machines : Machine 1 (encaisseuse) + Machine 2 (convoyeur aval)
+    const mc1 = ch.machines[0].id;
+    const mc2 = uid('mc');
+    ch.machines = [
+      { id: mc1, nom: 'Machine 1 — Encaisseuse', ref: 'ENC-01' },
+      { id: mc2, nom: 'Machine 2 — Convoyeur aval', ref: 'CONV-02' }
+    ];
+    (ch.taches || []).forEach(tc => { tc.machineId = mc1; });
+    // 4 tâches propres à la Machine 2 (dupliquées du modèle, statuts indépendants)
+    const phMeca = ch.phases.find(ph => /Montage/.test(ph.nom)) || ch.phases[1] || ch.phases[0];
+    const phElec = ch.phases.find(ph => /Câblage/.test(ph.nom)) || ch.phases[2] || ch.phases[0];
+    const phAuto = ch.phases.find(ph => /Automatisme/.test(ph.nom)) || ch.phases[3] || ch.phases[0];
+    const tachesMc2 = [
+      { titre: 'Mise en place et alignement du convoyeur aval', phaseId: phMeca.id, domaine: 'MECANIQUE', poids: 2, statut: 'fait', faitLe: j2, progression: 100, commentaire: 'Convoyeur aval aligné sur l\'encaisseuse.' },
+      { titre: 'Raccordement puissance 400V du convoyeur aval', phaseId: phElec.id, domaine: 'ELECTRIQUE', poids: 2, statut: 'encours', progression: 50, commentaire: 'Câble tiré, reste la connexion au sectionneur.' },
+      { titre: 'Test des cellules de transfert Machine 2', phaseId: phAuto.id, domaine: 'AUTOMATISME', poids: 2, statut: 'afaire', progression: 0, commentaire: '' },
+      { titre: 'Essai de transfert cartons Machine 1 vers Machine 2', phaseId: phAuto.id, domaine: 'AUTOMATISME', poids: 3, statut: 'afaire', progression: 0, commentaire: '' }
+    ];
+    tachesMc2.forEach(x => {
+      ch.taches.push({
+        id: uid('tc'), machineId: mc2, phaseId: x.phaseId, titre: x.titre, domaine: x.domaine, poids: x.poids,
+        statut: x.statut, progression: x.progression, faitLe: x.faitLe || '', commentaire: x.commentaire,
+        blocage: '', blocageOrigine: '', bloqueDepuis: '', blocageDuree: '', historiqueBlocages: [], photos: []
+      });
+    });
 
     const ts = ch.taches;
     [0, 1, 2, 3].forEach(i => { if (ts[i]) { ts[i].statut = 'fait'; ts[i].faitLe = j1; ts[i].progression = 100; } });
@@ -503,6 +540,7 @@
   let S = chargerReglages();
   let C = null;
   let filtreStatut = 'tous';  // 'tous' | 'afaire' | 'encours' | 'bloque' | 'fait_auj' | 'fait'
+  let filtreMachineId = 'toutes'; // 'toutes' | id machine
   let rechercheTexte = '';
   let timerSauvegarde = null;
   let dicteeActive = null;
@@ -531,6 +569,69 @@
       C.jours[d].creeManuellement = true;
     }
     return C.jours[d];
+  }
+
+  /* ===================== Machines de l'intervention ================= */
+  /** Garantit C.machines (au moins 1) et assigne machineId aux tâches orphelines. */
+  function assurerMachines(chantier) {
+    const c = chantier || C;
+    if (!c) return [];
+    if (!Array.isArray(c.machines) || !c.machines.length) {
+      c.machines = [{ id: uid('mc'), nom: 'Machine 1', ref: '' }];
+    }
+    c.machines = c.machines.filter(m => m && (m.id || m.nom)).map((m, i) => ({
+      id: m.id || uid('mc'),
+      nom: (m.nom || '').trim() || ('Machine ' + (i + 1)),
+      ref: (m.ref || '').trim()
+    }));
+    const ids = new Set(c.machines.map(m => m.id));
+    const defaut = c.machines[0].id;
+    (c.taches || []).forEach(tc => {
+      if (!tc.machineId || !ids.has(tc.machineId)) tc.machineId = defaut;
+    });
+    return c.machines;
+  }
+
+  function nomMachineParId(id) {
+    const machines = assurerMachines(C);
+    const m = machines.find(x => x.id === id);
+    return m ? m.nom : (machines[0] ? machines[0].nom : 'Machine 1');
+  }
+
+  function machineIdTacheCourante(tc) {
+    return Report.machineIdTache(tc, C);
+  }
+
+  /** Copie propre d'une tâche pour duplication (statut réinitialisé, photos non copiées). */
+  function clonerTachePourMachine(source, cibleMachineId) {
+    return {
+      id: uid('tc'),
+      machineId: cibleMachineId,
+      phaseId: source.phaseId,
+      titre: source.titre,
+      domaine: source.domaine || '',
+      poids: Report.poidsTache(source),
+      statut: 'afaire',
+      progression: 0,
+      faitLe: '',
+      commentaire: '',
+      blocage: '',
+      blocageOrigine: '',
+      bloqueDepuis: '',
+      blocageDuree: '',
+      historiqueBlocages: [],
+      photos: []
+    };
+  }
+
+  /** Duplique toutes les tâches d'une machine source vers une machine cible. Retourne le nombre copié. */
+  function dupliquerTachesMachine(sourceId, cibleId) {
+    if (!sourceId || !cibleId || sourceId === cibleId) return 0;
+    const sources = (C.taches || []).filter(tc => machineIdTacheCourante(tc) === sourceId);
+    if (!sources.length) return 0;
+    const copies = sources.map(tc => clonerTachePourMachine(tc, cibleId));
+    C.taches = (C.taches || []).concat(copies);
+    return copies.length;
   }
 
   /** Vérifie si un jour n'a strictement aucune note, photo, envoi ou tâche pointée. */
@@ -852,18 +953,23 @@
         ${C.equipement ? `<div style="color:var(--bfr-text-muted);font-size:12.5px">⚙️ ${esc(C.equipement)}</div>` : ''}
         ${txtDates ? `<div style="color:var(--bfr-text-muted);font-size:12.5px;margin-top:2px">📅 ${txtDates}</div>` : ''}
         <div style="color:var(--bfr-text-muted);font-size:12.5px;margin-top:2px">
+          🏭 Machines : <strong style="color:var(--bfr-secondary)">${(bilan.machines || []).map(m => esc(m.nom)).join(' · ') || 'Machine 1'}</strong>
+        </div>
+        <div style="color:var(--bfr-text-muted);font-size:12.5px;margin-top:2px">
           📧 Destinataires rapport : <strong style="color:var(--bfr-secondary)">${destActifs.length ? destActifs.length + ' personne' + (destActifs.length > 1 ? 's' : '') : 'aucun e-mail configuré'}</strong>
           ${cli.contact ? ` · Contact site : ${esc(cli.contact)}` : ''}
         </div>
       </div>
       <div class="btnrow">
         <button type="button" class="btn sm ghost" data-a="editer-chantier">${ICO.pen(14)} Chantier & Dates</button>
+        <button type="button" class="btn sm ghost" data-a="gerer-machines">🏭 Machines (${(bilan.machines || []).length})</button>
         <button type="button" class="btn sm ghost" data-a="editer-destinataires">${ICO.mail(15)} Destinataires (${destActifs.length})</button>
       </div>
     </div>`;
   }
 
   function tacheCorrespondFiltre(t, dateJour) {
+    if (filtreMachineId && filtreMachineId !== 'toutes' && machineIdTacheCourante(t) !== filtreMachineId) return false;
     if (filtreStatut === 'afaire' && (t.statut && t.statut !== 'afaire')) return false;
     if (filtreStatut === 'encours' && t.statut !== 'encours') return false;
     if (filtreStatut === 'bloque' && t.statut !== 'bloque') return false;
@@ -886,14 +992,33 @@
   function rendreTaches(bilan) {
     const el = $('#zoneTaches');
     if (!el) return;
+    const machines = assurerMachines(C);
+    if (filtreMachineId !== 'toutes' && !machines.some(m => m.id === filtreMachineId)) filtreMachineId = 'toutes';
+    const multiMachines = machines.length > 1;
+    // Comptes par machine pour les pastilles
+    const compteParMachine = {};
+    machines.forEach(m => { compteParMachine[m.id] = 0; });
+    (C.taches || []).forEach(tc => {
+      const mid = machineIdTacheCourante(tc);
+      compteParMachine[mid] = (compteParMachine[mid] || 0) + 1;
+    });
+    // Totaux filtrés par machine active (pour les filtres statut)
+    const tachesFiltreesMachine = filtreMachineId === 'toutes'
+      ? (C.taches || [])
+      : (C.taches || []).filter(tc => machineIdTacheCourante(tc) === filtreMachineId);
+    const nbFaitF = tachesFiltreesMachine.filter(x => x.statut === 'fait').length;
+    const nbEncF = tachesFiltreesMachine.filter(x => x.statut === 'encours').length;
+    const nbBloqF = tachesFiltreesMachine.filter(x => x.statut === 'bloque').length;
+    const nbAfaireF = tachesFiltreesMachine.filter(x => !x.statut || x.statut === 'afaire').length;
+    const nbFaitAujF = tachesFiltreesMachine.filter(x => x.statut === 'fait' && x.faitLe === bilan.dateJour).length;
 
     const filtres = [
-      { id: 'tous', lib: 'Toutes', n: bilan.total },
-      { id: 'afaire', lib: 'À faire', n: bilan.aFaire.length },
-      { id: 'encours', lib: 'En cours', n: bilan.enCours.length },
-      { id: 'bloque', lib: 'Bloquées', n: bilan.bloques.length, cls: 'bloque' },
-      { id: 'fait_auj', lib: 'Faites ce jour', n: bilan.faitCeJour.length },
-      { id: 'fait', lib: 'Terminées', n: bilan.faitTotal.length }
+      { id: 'tous', lib: 'Toutes', n: tachesFiltreesMachine.length },
+      { id: 'afaire', lib: 'À faire', n: nbAfaireF },
+      { id: 'encours', lib: 'En cours', n: nbEncF },
+      { id: 'bloque', lib: 'Bloquées', n: nbBloqF, cls: 'bloque' },
+      { id: 'fait_auj', lib: 'Faites ce jour', n: nbFaitAujF },
+      { id: 'fait', lib: 'Terminées', n: nbFaitF }
     ];
 
     let corpsPhases = '';
@@ -909,11 +1034,17 @@
     } else {
       let nbAffichees = 0;
       bilan.parPhase.forEach(ph => {
-        const visibles = ph.taches.filter(t => tacheCorrespondFiltre(t, bilan.dateJour));
-        if (!visibles.length && (filtreStatut !== 'tous' || rechercheTexte)) return;
+        const tachesPhaseFiltrees = ph.taches.filter(t => filtreMachineId === 'toutes' || machineIdTacheCourante(t) === filtreMachineId);
+        const visibles = tachesPhaseFiltrees.filter(t => tacheCorrespondFiltre(t, bilan.dateJour));
+        if (!visibles.length && (filtreStatut !== 'tous' || rechercheTexte || filtreMachineId !== 'toutes')) return;
         nbAffichees += visibles.length;
-        const pliee = !!(C.phasesPliees && C.phasesPliees[ph.id]) && filtreStatut === 'tous' && !rechercheTexte;
-        const complet = ph.total > 0 && ph.fait === ph.total;
+        const pliee = !!(C.phasesPliees && C.phasesPliees[ph.id]) && filtreStatut === 'tous' && !rechercheTexte && filtreMachineId === 'toutes';
+        const totPh = tachesPhaseFiltrees.length;
+        const faitPh = tachesPhaseFiltrees.filter(x => x.statut === 'fait').length;
+        const pTotPh = tachesPhaseFiltrees.reduce((s, x) => s + Report.poidsTache(x), 0);
+        const pAcqPh = tachesPhaseFiltrees.reduce((s, x) => s + (x.statut === 'fait' ? Report.poidsTache(x) : (x.statut === 'encours' ? Report.poidsTache(x) * (Math.min(95, Math.max(5, Number(x.progression) || 50)) / 100) : 0)), 0);
+        const pctPh = pTotPh ? Math.round((pAcqPh / pTotPh) * 100) : 0;
+        const complet = totPh > 0 && faitPh === totPh;
 
         corpsPhases += `<div class="phase-bloc${pliee ? ' pliee' : ''}" data-phase-id="${esc(ph.id)}">
           <div class="phase-hdr" data-a="plier-phase" data-id="${esc(ph.id)}">
@@ -922,8 +1053,8 @@
               <span class="phase-titre">${esc(ph.nom)}</span>
             </div>
             <div class="phase-hdr-right">
-              <span class="phase-stat${complet ? ' complet' : ''}">${ph.fait}/${ph.total}</span>
-              <span class="phase-minibar${complet ? ' complet' : ''}"><span style="width:${ph.pct}%"></span></span>
+              <span class="phase-stat${complet ? ' complet' : ''}">${faitPh}/${totPh}</span>
+              <span class="phase-minibar${complet ? ' complet' : ''}"><span style="width:${pctPh}%"></span></span>
               <button type="button" class="phase-add-btn" data-a="ajouter-tache-phase" data-phase="${esc(ph.id)}" title="Ajouter une tâche dans cette phase">+</button>
             </div>
           </div>
@@ -933,7 +1064,7 @@
         </div>`;
       });
 
-      if (!nbAffichees && (filtreStatut !== 'tous' || rechercheTexte)) {
+      if (!nbAffichees && (filtreStatut !== 'tous' || rechercheTexte || filtreMachineId !== 'toutes')) {
         corpsPhases = `<div style="padding:18px;text-align:center;color:var(--bfr-text-muted);font-size:13.5px;background:#f8fafc;border-radius:8px;border:1px dashed var(--bfr-border)">
           Aucune tâche ne correspond au filtre sélectionné.
           <div style="margin-top:8px"><button type="button" class="btn sm grey" data-filtre-rapide="tous">Afficher toutes les tâches</button></div>
@@ -947,12 +1078,28 @@
           ${ICO.checklist(19, 'ico-cyan')} Checklist du chantier
         </h2>
         <div style="display:flex;gap:6px">
+          <button type="button" class="btn sm ghost" data-a="gerer-machines" title="Gérer les machines et dupliquer les tâches">🏭 Machines</button>
           <button type="button" class="btn sm ghost" data-a="gerer-phases" title="Gérer les phases / lots">Phases</button>
           <button type="button" class="btn sm ghost" data-a="ouvrir-import" title="Importer ou coller des tâches">${ICO.upload(14)} Importer</button>
         </div>
       </div>
 
       ${bilan.total > 0 ? `
+      <div class="machine-bar" role="tablist" aria-label="Filtrer par machine">
+        <button type="button" class="machine-chip ${filtreMachineId === 'toutes' ? 'on' : ''}" data-machine-filtre="toutes" title="Afficher les tâches de toutes les machines">
+          🏭 Toutes <span class="cnt">${bilan.total}</span>
+        </button>
+        ${machines.map(m => {
+          const pm = (bilan.parMachine || []).find(x => x.id === m.id);
+          return `<button type="button" class="machine-chip ${filtreMachineId === m.id ? 'on' : ''}" data-machine-filtre="${esc(m.id)}" title="${esc(m.nom)} — ${pm ? pm.pct : 0} %">
+            ${esc(m.nom)} <span class="cnt">${compteParMachine[m.id] || 0}</span>${pm ? ` <span class="pct">${pm.pct}%</span>` : ''}
+          </button>`;
+        }).join('')}
+        <button type="button" class="machine-chip ajout" data-a="ajouter-machine" title="Ajouter une machine à cette intervention">+ Machine</button>
+      </div>
+      ${multiMachines ? `<div class="machine-actions">
+        <button type="button" class="btn sm ghost" data-a="dupliquer-machines">⧉ Dupliquer les tâches vers une autre machine</button>
+      </div>` : ''}
       <div class="filtres-wrap">
         <div class="filtres-scroll">
           ${filtres.map(f => `<button type="button" class="filtre-chip ${f.cls || ''}${filtreStatut === f.id ? ' on' : ''}" data-filtre-rapide="${f.id}">
@@ -1006,6 +1153,9 @@
     }
 
     const domLabel = Report.DOMAINES[t.domaine] || '';
+    const machines = assurerMachines(C);
+    const multiMachines = machines.length > 1;
+    const mcNom = nomMachineParId(machineIdTacheCourante(t));
 
     return `<div class="tache-item st-${esc(st)}" data-tache-id="${esc(t.id)}">
       <button type="button" class="tache-check-zone" data-a="cocher-tache" data-id="${esc(t.id)}" aria-label="Cocher la tâche">
@@ -1014,6 +1164,7 @@
       <div class="tache-main" data-a="ouvrir-tache" data-id="${esc(t.id)}">
         <div class="tache-titre">${esc(t.titre)}</div>
         <div class="tache-meta">
+          ${multiMachines ? `<span class="tache-tag machine">🏭 ${esc(mcNom)}</span>` : ''}
           ${badgeStatut}
           ${leveeCeJour && st !== 'bloque' ? `<span class="tache-tag leve">🔓 Blocage levé</span>` : ''}
           ${wPoids > 1 ? `<span class="tache-tag poids">×${wPoids}</span>` : ''}
@@ -1452,6 +1603,7 @@
 
   function rendreTout() {
     if (!C) return;
+    assurerMachines(C);
     synchroniserDatesChantier(C);
     const bilan = Report.calculerBilan(C, C.jourActif);
     rendreTopbar(bilan);
@@ -1518,9 +1670,13 @@
     const phases = (C.phases && C.phases.length) ? C.phases : [{ id: uid('ph'), nom: 'Tâches du chantier' }];
     if (!C.phases || !C.phases.length) C.phases = phases;
 
+    const machinesTache = assurerMachines(C);
+    const machineDefautTache = (filtreMachineId !== 'toutes' && machinesTache.some(m => m.id === filtreMachineId))
+      ? filtreMachineId : machinesTache[0].id;
     let t = estNouvelle
       ? {
           id: uid('tc'),
+          machineId: machineDefautTache,
           phaseId: phaseParDefaut || phases[0].id,
           titre: '',
           domaine: '',
@@ -1542,6 +1698,7 @@
 
     function synchroniserChamps(panneau) {
       const elTitre = $('#tcTitre', panneau); if (elTitre) t.titre = elTitre.value;
+      const elMc = $('#tcMachine', panneau); if (elMc) t.machineId = elMc.value;
       const elPh = $('#tcPhase', panneau); if (elPh) t.phaseId = elPh.value;
       const elDom = $('#tcDomaine', panneau); if (elDom) t.domaine = elDom.value;
       const elComm = $('#tcComm', panneau); if (elComm) t.commentaire = elComm.value;
@@ -1567,6 +1724,13 @@
         <div class="field">
           <label>Intitulé de la tâche *</label>
           <textarea id="tcTitre" rows="2" placeholder="Ex. Raccordement puissance 400V armoire principale…">${esc(t.titre)}</textarea>
+        </div>
+
+        <div class="field">
+          <label>🏭 Machine de l'intervention</label>
+          <select id="tcMachine">
+            ${assurerMachines(C).map(m => `<option value="${esc(m.id)}"${m.id === (t.machineId || machinesTache[0].id) ? ' selected' : ''}>${esc(m.nom)}${m.ref ? ' (' + esc(m.ref) + ')' : ''}</option>`).join('')}
+          </select>
         </div>
 
         <div class="grid2">
@@ -1677,6 +1841,15 @@
         <div class="field">
           ${construireBlocPhotosHtml(t.photos || [], 'tc', 'Photos sur cette tâche')}
         </div>
+
+        ${!estNouvelle && assurerMachines(C).length > 1 ? `
+        <div class="field" style="margin-top:10px">
+          <label>⧉ Dupliquer cette tâche vers une autre machine</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            ${assurerMachines(C).filter(m => m.id !== (t.machineId || machinesTache[0].id)).map(m => `<button type="button" class="btn sm ghost" data-act="dupliquer-tache-vers" data-cible="${esc(m.id)}">→ ${esc(m.nom)}</button>`).join('')}
+          </div>
+          <p class="hint" style="margin:6px 0 0">La copie repart « À faire » (statut et photos réinitialisés).</p>
+        </div>` : ''}
 
         <div class="btnrow" style="margin-top:12px">
           <button type="button" class="btn grey" data-a="fermer">Annuler</button>
@@ -1794,6 +1967,18 @@
             rendreTout();
             toast('Tâche supprimée');
           }
+        } else if (nomAct === 'dupliquer-tache-vers') {
+          synchroniserChamps(panneau);
+          if (!t.titre.trim()) { toast('Indiquez l\'intitulé avant de dupliquer'); return; }
+          const cibleId = act.dataset.cible;
+          const copie = clonerTachePourMachine(t, cibleId);
+          copie.titre = t.titre.trim();
+          C.taches = C.taches || [];
+          C.taches.push(copie);
+          planifierSauvegarde();
+          overlay.remove();
+          rendreTout();
+          toast('⧉ Tâche dupliquée vers ' + nomMachineParId(cibleId));
         } else if (nomAct === 'enregistrer-tache') {
           synchroniserChamps(panneau);
           if (!t.titre.trim()) {
@@ -1812,6 +1997,119 @@
           planifierSauvegarde();
           overlay.remove();
           rendreTout();
+        }
+      });
+    });
+  }
+
+  /* ===================== Gestion des Machines & Duplication ========= */
+  function feuilleMachines() {
+    assurerMachines(C);
+    function dessiner(panneau) {
+      const bilan = Report.calculerBilan(C, C.jourActif);
+      const machines = C.machines || [];
+      panneau.innerHTML = `
+        <div class="grab"></div>
+        <h3>Machines de l'intervention</h3>
+        <p class="sub">Chaque machine possède ses propres tâches. Ajoutez une 2e machine puis dupliquez en 1 appui les tâches de la 1re machine.</p>
+
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">
+          ${machines.map((m, idx) => {
+            const pm = (bilan.parMachine || []).find(x => x.id === m.id) || { total: 0, fait: 0, pct: 0, bloque: 0 };
+            return `<div class="machine-carte">
+              <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                <span class="machine-num">🏭 ${idx + 1}</span>
+                <input type="text" data-mc-nom="${idx}" value="${esc(m.nom)}" style="flex:1;min-width:140px;padding:7px 10px;border:1px solid var(--bfr-border);border-radius:6px;font-weight:600" aria-label="Nom de la machine">
+                <input type="text" data-mc-ref="${idx}" value="${esc(m.ref || '')}" placeholder="Réf. (ex. ENC-01)" style="width:110px;padding:7px 10px;border:1px solid var(--bfr-border);border-radius:6px" aria-label="Référence machine">
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap">
+                <span class="pill">${pm.fait}/${pm.total} · ${pm.pct} %</span>
+                ${pm.bloque ? `<span class="pill def">${pm.bloque} bloqué${pm.bloque > 1 ? 's' : ''}</span>` : ''}
+                <div style="flex:1;min-width:80px">
+                  <div class="phase-minibar" style="width:100%"><span style="width:${pm.pct}%"></span></div>
+                </div>
+                ${machines.length > 1 ? `<button type="button" class="btn sm danger" data-mc-suppr="${idx}" style="padding:4px 8px;min-height:32px">${ICO.trash(14)}</button>` : ''}
+              </div>
+              ${machines.length > 1 ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+                ${machines.filter(x => x.id !== m.id).map(x => `<button type="button" class="btn sm ghost" data-mc-dup="${idx}" data-mc-cible="${esc(x.id)}" title="Copier les ${pm.total} tâches de ${esc(m.nom)} vers ${esc(x.nom)} (statuts réinitialisés)">⧉ Dupliquer vers ${esc(x.nom)}</button>`).join('')}
+              </div>` : `<p class="hint" style="margin:8px 0 0">Ajoutez une 2e machine ci-dessous pour pouvoir dupliquer les tâches en 1 appui.</p>`}
+            </div>`;
+          }).join('')}
+        </div>
+
+        <div style="display:flex;gap:8px;margin-bottom:14px">
+          <input type="text" id="nouvMachineNom" placeholder="Nom de la nouvelle machine (ex. Machine 2 — Convoyeur)…" style="flex:1;padding:10px 12px;border:1.5px solid var(--bfr-border);border-radius:8px">
+          <button type="button" class="btn principal sm" data-mc-ajouter="1">${ICO.plus(16)} Ajouter</button>
+        </div>
+
+        <button type="button" class="btn wide" data-a="fermer">Terminé</button>`;
+
+      $$('[data-mc-nom]', panneau).forEach(inp => {
+        inp.addEventListener('input', () => {
+          const i = Number(inp.dataset.mcNom);
+          if (C.machines[i]) { C.machines[i].nom = inp.value; planifierSauvegarde(); }
+        });
+      });
+      $$('[data-mc-ref]', panneau).forEach(inp => {
+        inp.addEventListener('input', () => {
+          const i = Number(inp.dataset.mcRef);
+          if (C.machines[i]) { C.machines[i].ref = inp.value; planifierSauvegarde(); }
+        });
+      });
+    }
+
+    Ouvrir.ouvrir('<div class="panel"></div>', (panneau) => {
+      dessiner(panneau);
+      panneau.addEventListener('click', async (e) => {
+        if (e.target.closest('[data-mc-ajouter]')) {
+          const inp = $('#nouvMachineNom', panneau);
+          const v = (inp && inp.value || '').trim();
+          if (!v) { toast('Saisissez le nom de la machine'); return; }
+          C.machines.push({ id: uid('mc'), nom: v, ref: '' });
+          planifierSauvegarde();
+          dessiner(panneau);
+          toast('Machine ajoutée');
+          return;
+        }
+        const dup = e.target.closest('[data-mc-dup]');
+        if (dup) {
+          const i = Number(dup.dataset.mcDup);
+          const source = C.machines[i];
+          const cibleId = dup.dataset.mcCible;
+          if (!source) return;
+          const nb = (C.taches || []).filter(tc => machineIdTacheCourante(tc) === source.id).length;
+          if (!nb) { toast('Aucune tâche à dupliquer sur ' + source.nom); return; }
+          const ok = await Dialogue.confirmer(
+            'Dupliquer les ' + nb + ' tâche(s) de « ' + source.nom + ' » vers « ' + nomMachineParId(cibleId) + ' » ?\nLes copies repartent « À faire » (statuts et photos réinitialisés).',
+            { ok: 'Dupliquer' }
+          );
+          if (!ok) return;
+          const n = dupliquerTachesMachine(source.id, cibleId);
+          planifierSauvegarde();
+          dessiner(panneau);
+          rendreTout();
+          toast('⧉ ' + n + ' tâche(s) dupliquée(s) vers ' + nomMachineParId(cibleId));
+          return;
+        }
+        const s = e.target.closest('[data-mc-suppr]');
+        if (s) {
+          const i = Number(s.dataset.mcSuppr);
+          const m = C.machines[i];
+          if (!m) return;
+          if (C.machines.length <= 1) { toast('Il faut conserver au moins une machine'); return; }
+          const nb = (C.taches || []).filter(tc => machineIdTacheCourante(tc) === m.id).length;
+          const ok = await Dialogue.confirmer(
+            'Supprimer « ' + m.nom + ' » ?' + (nb ? '\nSes ' + nb + ' tâche(s) seront également supprimées.' : ''),
+            { ok: 'Supprimer', danger: true }
+          );
+          if (!ok) return;
+          C.machines.splice(i, 1);
+          C.taches = (C.taches || []).filter(tc => machineIdTacheCourante(tc) !== m.id);
+          if (filtreMachineId === m.id) filtreMachineId = 'toutes';
+          planifierSauvegarde();
+          dessiner(panneau);
+          rendreTout();
+          toast('Machine supprimée');
         }
       });
     });
@@ -1894,13 +2192,41 @@
 
   /* ===================== Import de tâches & Modèles BFR =============== */
   function integrerTachesImportees(res, remplacer) {
+    assurerMachines(C);
+    const machinesImportees = Array.isArray(res.machines) ? res.machines : [];
     if (remplacer) {
       C.phases = res.phases.length ? res.phases : [{ id: uid('ph'), nom: 'Tâches du chantier' }];
-      C.taches = res.taches;
+      if (machinesImportees.length) {
+        C.machines = machinesImportees.map(m => ({ id: m.id || uid('mc'), nom: m.nom || 'Machine', ref: m.ref || '' }));
+      } else if (!C.machines || !C.machines.length) {
+        C.machines = [{ id: uid('mc'), nom: 'Machine 1', ref: '' }];
+      }
+      const idsMc = new Set(C.machines.map(m => m.id));
+      const defautMc = C.machines[0].id;
+      C.taches = (res.taches || []).map(tc => {
+        if (!tc.machineId || !idsMc.has(tc.machineId)) tc.machineId = defautMc;
+        return tc;
+      });
       C.estDemo = false;
     } else {
       C.phases = C.phases || [];
       C.taches = C.taches || [];
+      // Machines importées : fusion par nom normalisé
+      const mapMc = {};
+      C.machines.forEach(m => { mapMc[ImportTaches.norm(m.nom)] = m.id; });
+      const remapMc = {};
+      machinesImportees.forEach(m => {
+        const cle = ImportTaches.norm(m.nom);
+        if (mapMc[cle]) remapMc[m.id] = mapMc[cle];
+        else {
+          const nm = { id: m.id || uid('mc'), nom: m.nom || 'Machine', ref: m.ref || '' };
+          C.machines.push(nm);
+          mapMc[cle] = nm.id;
+          remapMc[m.id] = nm.id;
+        }
+      });
+      const defautMc = (filtreMachineId !== 'toutes' && C.machines.some(m => m.id === filtreMachineId))
+        ? filtreMachineId : C.machines[0].id;
       const mapPh = {};
       C.phases.forEach(p => { mapPh[ImportTaches.norm(p.nom)] = p.id; });
       const remap = {};
@@ -1909,9 +2235,10 @@
         if (mapPh[cle]) remap[p.id] = mapPh[cle];
         else { C.phases.push(p); mapPh[cle] = p.id; remap[p.id] = p.id; }
       });
-      res.taches.forEach(t => {
-        t.phaseId = remap[t.phaseId] || (C.phases[0] && C.phases[0].id);
-        C.taches.push(t);
+      res.taches.forEach(tc => {
+        tc.phaseId = remap[tc.phaseId] || (C.phases[0] && C.phases[0].id);
+        tc.machineId = (tc.machineId && remapMc[tc.machineId]) ? remapMc[tc.machineId] : (tc.machineId && C.machines.some(m => m.id === tc.machineId) ? tc.machineId : defautMc);
+        C.taches.push(tc);
       });
       C.estDemo = false;
     }
@@ -1936,7 +2263,7 @@
 
         ${onglet === 'texte' ? `
           <div class="card" style="margin-bottom:10px">
-            <p class="hint" style="margin-top:0">Collez votre liste (depuis un mail, Word, Notes ou WhatsApp). Astuce : une ligne finissant par <strong>:</strong> ou précédée de <strong>#</strong> crée une Phase/Lot, et <strong>[x2]</strong> / <strong>[x3]</strong> définit la pondération !</p>
+            <p class="hint" style="margin-top:0">Collez votre liste (depuis un mail, Word, Notes ou WhatsApp). Astuce : <strong>MACHINE: Machine 2</strong> crée une machine, une ligne finissant par <strong>:</strong> ou précédée de <strong>#</strong> crée une Phase/Lot, et <strong>[x2]</strong> / <strong>[x3]</strong> définit la pondération !</p>
             <textarea id="txtImportColler" rows="8" placeholder="# 1. Montage mécanique\n- Mise en place et alignement châssis [x3]\n- Chevillage au sol [x2]\n\n# 2. Câblage & Automatisme\n- Raccordement 400V [x2]\n- Test chaîne des arrêts d'urgence [x3]" style="width:100%;font-size:13.5px"></textarea>
             <div style="margin-top:8px;display:flex;align-items:center;gap:8px">
               <input type="checkbox" id="chkRemplacerTxt" ${(C.taches || []).length === 0 || C.estDemo ? 'checked' : ''}>
@@ -2085,11 +2412,16 @@
         <div id="apercuPlanningDates" class="sticky-note" style="margin-bottom:10px;background:var(--bfr-primary-light);border-color:var(--bfr-primary-border);color:var(--bfr-secondary);font-size:12.5px"></div>
 
         <div class="grid2">
-          <div class="field"><label>Responsable chantier BFR</label>
-            <input type="text" data-ck="responsable" value="${esc(C.responsable || Report.nomComplet(S.technicien) || '')}" placeholder="Prénom NOM"></div>
-          <div class="field"><label>Équipe / Collègues sur site</label>
-            <input type="text" data-ck="equipe" value="${esc(C.equipe || '')}" placeholder="Ex. M. Martin, P. Bernard"></div>
+          <div class="field"><label>Technicien BFR — Nom Prénom</label>
+            <input type="text" data-ck="responsable" value="${esc(C.responsable || Report.nomComplet(S.technicien) || '')}" placeholder="Ex. Julien DURAND"></div>
+          <div class="field"><label>Rôle du technicien</label>
+            <select data-ck="technicienRole">
+              <option value="">— Choisir le rôle —</option>
+              ${Report.ROLES_TECHNICIEN.map(r => `<option value="${esc(r)}"${(C.technicienRole || (S.technicien && S.technicien.fonction)) === r ? ' selected' : ''}>${esc(r)}</option>`).join('')}
+            </select></div>
         </div>
+        <div class="field"><label>Équipe / Collègues sur site</label>
+          <input type="text" data-ck="equipe" value="${esc(C.equipe || '')}" placeholder="Ex. M. Martin, P. Bernard"></div>
       </div>
 
       <div class="card">
@@ -2555,16 +2887,23 @@
     const b = Report.calculerBilan(C, C.jourActif);
     const j = assurerJour(C.jourActif);
     const parties = [];
+    const multiMc = (b.machines || []).length > 1;
+    const pref = (tc) => multiMc ? ('[' + b.nomMachine(tc) + '] ') : '';
     if (b.faitCeJour.length) {
-      parties.push('Travaux réalisés ce jour (' + b.faitCeJour.length + ') : ' + b.faitCeJour.map(t => t.titre).join(' ; ') + '.');
+      parties.push('Travaux réalisés ce jour (' + b.faitCeJour.length + ') : ' + b.faitCeJour.map(tc => pref(tc) + tc.titre).join(' ; ') + '.');
     }
     if (b.enCours.length) {
-      parties.push('En cours : ' + b.enCours.map(t => t.titre + (t.progression ? ' (' + t.progression + '%)' : '')).join(' ; ') + '.');
+      parties.push('En cours : ' + b.enCours.map(tc => pref(tc) + tc.titre + (tc.progression ? ' (' + tc.progression + '%)' : '')).join(' ; ') + '.');
     }
     if (b.bloques.length) {
-      parties.push('Points bloquants à lever : ' + b.bloques.map(t => t.titre + (t.blocage ? ' (' + t.blocage + ')' : '')).join(' ; ') + '.');
+      parties.push('Points bloquants à lever : ' + b.bloques.map(tc => pref(tc) + tc.titre + (tc.blocage ? ' (' + tc.blocage + ')' : '')).join(' ; ') + '.');
     }
     parties.push('Avancement global du chantier : ' + b.pctGlobal + ' % (' + b.faitTotal.length + '/' + b.total + ').');
+    if (multiMc) {
+      (b.parMachine || []).filter(m => m.total > 0).forEach(m => {
+        parties.push(m.nom + ' : ' + m.pct + ' % (' + m.fait + '/' + m.total + ').');
+      });
+    }
     j.synthese = parties.join('\n');
     planifierSauvegarde();
     rendreTout();
@@ -2579,7 +2918,8 @@
       toast('Toutes les tâches sont déjà terminées !');
       return;
     }
-    j.prevuDemain = suite.map(t => '• ' + (t.statut === 'encours' ? 'Poursuite : ' : '') + t.titre).join('\n');
+    const multiMc2 = (b.machines || []).length > 1;
+    j.prevuDemain = suite.map(tc => '• ' + (multiMc2 ? ('[' + b.nomMachine(tc) + '] ') : '') + (tc.statut === 'encours' ? 'Poursuite : ' : '') + tc.titre).join('\n');
     planifierSauvegarde();
     rendreTout();
     toast('Programme du lendemain pré-rempli');
@@ -2837,6 +3177,11 @@
         <span><strong>Mes chantiers</strong><small>Changer de chantier, en créer un nouveau ou archiver</small></span>
       </button>
 
+      <button type="button" class="menu-item" data-m="machines">
+        <span class="ico">🏭</span>
+        <span><strong>Machines &amp; Duplication des tâches</strong><small>Ajouter une machine, renommer, dupliquer les tâches en 1 appui</small></span>
+      </button>
+
       <button type="button" class="menu-item" data-m="import">
         <span class="ico">${ICO.upload(18)}</span>
         <span><strong>Importer des tâches (.xlsx, .csv, texte)</strong><small>Charger une liste préparée au bureau ou un modèle BFR</small></span>
@@ -2844,7 +3189,7 @@
 
       <button type="button" class="menu-item" data-m="identite">
         <span class="ico">${ICO.user(18)}</span>
-        <span><strong>Mes informations (Intervenant BFR)</strong><small>${esc(Report.nomComplet(S.technicien) || 'Nom, téléphone et e-mail affichés sur les rapports')}</small></span>
+        <span><strong>Mes informations (Technicien BFR)</strong><small>${esc(Report.nomComplet(S.technicien) || 'Nom, prénom et rôle affichés sur les rapports')}</small></span>
       </button>
 
       <button type="button" class="menu-item" data-m="reglages">
@@ -2867,6 +3212,7 @@
         const action = bm.dataset.m;
         overlay.remove();
         if (action === 'mes-chantiers') feuilleMesChantiers();
+        else if (action === 'machines') feuilleMachines();
         else if (action === 'import') feuilleImport('texte');
         else if (action === 'identite') feuilleIdentite();
         else if (action === 'reglages') feuilleReglages();
@@ -3018,14 +3364,18 @@
     const html = `<div class="panel">
       <div class="grab"></div>
       <h3>Mes informations</h3>
-      <p class="sub">Conservées sur votre téléphone et reprises automatiquement dans l'encadré « Votre interlocuteur BFR Systems » de chaque rapport quotidien.</p>
+      <p class="sub">Conservées sur votre téléphone et reprises automatiquement dans l'encadré « Technicien BFR Systems » de chaque rapport quotidien (nom, prénom et rôle uniquement).</p>
 
       <div class="card">
         <div class="grid2">
           <div class="field"><label>Prénom</label><input type="text" id="idPrenom" value="${esc(t.prenom || '')}" placeholder="Ex. Julien"></div>
           <div class="field"><label>Nom</label><input type="text" id="idNom" value="${esc(t.nom || '')}" placeholder="Ex. DURAND"></div>
         </div>
-        <div class="field"><label>Fonction</label><input type="text" id="idFonction" value="${esc(t.fonction || '')}" placeholder="Ex. Chargé de chantier / Automaticien BFR"></div>
+        <div class="field"><label>Rôle du technicien</label>
+          <select id="idFonction">
+            <option value="">— Choisir le rôle —</option>
+            ${Report.ROLES_TECHNICIEN.map(r => `<option value="${esc(r)}"${t.fonction === r ? ' selected' : ''}>${esc(r)}</option>`).join('')}
+          </select></div>
         <div class="grid2">
           <div class="field"><label>Téléphone</label><input type="tel" id="idTel" value="${esc(t.tel || '')}" placeholder="06 12 34 56 78"></div>
           <div class="field"><label>E-mail BFR</label><input type="email" id="idEmail" value="${esc(t.email || '')}" placeholder="prenom.nom@bfr-systems.fr"></div>
@@ -3047,6 +3397,7 @@
         };
         sauverReglages();
         if (!C.responsable || C.estDemo) C.responsable = Report.nomComplet(S.technicien);
+        if (!C.technicienRole || C.estDemo) C.technicienRole = S.technicien.fonction;
         planifierSauvegarde();
         overlay.remove();
         rendreTout();
@@ -3144,6 +3495,13 @@
         return;
       }
 
+      const btnMachineFiltre = e.target.closest('[data-machine-filtre]');
+      if (btnMachineFiltre) {
+        filtreMachineId = btnMachineFiltre.dataset.machineFiltre;
+        rendreTout();
+        return;
+      }
+
       const btnDic = e.target.closest('[data-dictee]');
       if (btnDic) {
         const zone = $('#' + btnDic.dataset.dictee);
@@ -3175,6 +3533,12 @@
       } else if (a === 'vider-recherche') {
         rechercheTexte = '';
         rendreTaches(Report.calculerBilan(C, C.jourActif));
+      } else if (a === 'gerer-machines') {
+        feuilleMachines();
+      } else if (a === 'ajouter-machine') {
+        feuilleMachines();
+      } else if (a === 'dupliquer-machines') {
+        feuilleMachines();
       } else if (a === 'gerer-phases') {
         feuillePhases();
       } else if (a === 'ouvrir-import') {
@@ -3260,6 +3624,7 @@
       C = creerChantierDemonstration();
     }
 
+    assurerMachines(C);
     synchroniserDatesChantier(C);
     await BaseLocale.sauverChantier(C);
     try { localStorage.setItem(CLE_COURANT, C.id); } catch (_) {}

@@ -3857,6 +3857,86 @@ body.mode-rsav .actionbar #btnAjouterPiece { flex: 1 1 100%; }
   padding: 8px;
 }
 
+
+/* =========================================================================
+   MACHINES DE L'INTERVENTION — Sélecteur, cartes et duplication
+   ========================================================================= */
+.machine-bar {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  margin-bottom: 8px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.machine-bar::-webkit-scrollbar { display: none; }
+.machine-chip {
+  border: 1.5px solid var(--bfr-border);
+  background: #fff;
+  color: var(--bfr-text-muted);
+  font-family: var(--font-heading);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 7px 11px;
+  border-radius: 999px;
+  white-space: nowrap;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+.machine-chip .cnt {
+  background: var(--bfr-bg);
+  color: var(--bfr-secondary);
+  border-radius: 999px;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.machine-chip .pct {
+  color: var(--bfr-primary);
+  font-size: 11px;
+}
+.machine-chip.on {
+  background: var(--bfr-secondary);
+  border-color: var(--bfr-secondary);
+  color: #fff;
+}
+.machine-chip.on .cnt { background: rgba(255,255,255,0.22); color: #fff; }
+.machine-chip.on .pct { color: #fff; }
+.machine-chip.ajout {
+  border-style: dashed;
+  border-color: var(--bfr-primary);
+  color: var(--bfr-secondary);
+  background: var(--bfr-primary-light);
+}
+.machine-actions { margin-bottom: 8px; }
+.machine-actions .btn { width: 100%; }
+.tache-tag.machine {
+  background: #eef2ff;
+  color: var(--bfr-secondary);
+  border-color: #c7d2fe;
+  font-weight: 700;
+}
+.machine-carte {
+  background: #fff;
+  border: 1px solid var(--bfr-border);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.machine-num {
+  font-family: var(--font-heading);
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--bfr-secondary);
+  background: var(--bfr-secondary-light);
+  border-radius: 999px;
+  padding: 3px 9px;
+  flex-shrink: 0;
+}
 </style>
 </head>
 <body>
@@ -5670,6 +5750,8 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
     const phasesMap = new Map();
     const phases = [];
     const taches = [];
+    const machinesMap = new Map();
+    const machines = [];
 
     function obtenirPhase(nom) {
       const propre = String(nom || 'Général').trim() || 'Général';
@@ -5681,7 +5763,18 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       return p;
     }
 
+    function obtenirMachine(nom) {
+      const propre = String(nom || 'Machine 1').trim() || 'Machine 1';
+      const cle = norm(propre) || 'MACHINE1';
+      if (machinesMap.has(cle)) return machinesMap.get(cle);
+      const m = { id: uid('mc'), nom: propre, ref: '' };
+      machinesMap.set(cle, m);
+      machines.push(m);
+      return m;
+    }
+
     let phaseCourante = null;
+    let machineCourante = null;
 
     lignes.forEach(function (brut) {
       let l = brut.trim();
@@ -5692,6 +5785,14 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       const estMotPhase = /^(?:phase|lot|zone|etape|étape)\s*\d*\s*[:\-–]\s*(.+)$/i.exec(l);
       const aPuce = /^(?:[-*•◦▪▸►→]|\[[ xX✓✔!~\-]\]|\d+[.)]\s)/.test(l);
 
+      // Titre de machine : "MACHINE: ...", "MACHINE 2 - ...", "## Machine 2"
+      const mMachine = /^(?:#{1,4}\s*)?machine\s*(\d+)?\s*[:\-\u2013]?\s*(.*)$/i.exec(l);
+      if (mMachine && !aPuce && l.length < 90) {
+        const suffixe = (mMachine[2] || '').replace(/:$/, '').trim();
+        const nomMc = suffixe || ('Machine ' + (mMachine[1] || (machines.length + 1)));
+        machineCourante = obtenirMachine(nomMc);
+        return;
+      }
       if (estMarkdownTitre) {
         phaseCourante = obtenirPhase(estMarkdownTitre[1].replace(/:$/, '').trim());
         return;
@@ -5751,6 +5852,7 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       const ph = phaseCourante || obtenirPhase('Tâches du chantier');
       taches.push({
         id: uid('tc'),
+        machineId: machineCourante ? machineCourante.id : '',
         phaseId: ph.id,
         titre: l,
         domaine: domaine,
@@ -5768,7 +5870,7 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       });
     });
 
-    return { phases: phases, taches: taches };
+    return { phases: phases, taches: taches, machines: machines };
   }
 
   /* ===================== 2. Analyse CSV ================================= */
@@ -5816,7 +5918,8 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
     if (!Array.isArray(lignes) || !lignes.length) return { phases: [], taches: [] };
 
     const COLONNES = {
-      phase: ['PHASE', 'PHASES', 'LOT', 'LOTS', 'ZONE', 'ZONES', 'CATEGORIE', 'SECTION', 'ETAPE', 'MACHINE'],
+      machine: ['MACHINE', 'MACHINES', 'EQUIPEMENT', 'LIGNE', 'UNITE'],
+      phase: ['PHASE', 'PHASES', 'LOT', 'LOTS', 'ZONE', 'ZONES', 'CATEGORIE', 'SECTION', 'ETAPE'],
       titre: ['TACHE', 'TACHES', 'INTITULE', 'DESIGNATION', 'DESCRIPTION', 'LIBELLE', 'ACTION', 'TRAVAUX', 'POINT', 'ELEMENT'],
       domaine: ['DOMAINE', 'METIER', 'SPECIALITE', 'TYPE'],
       poids: ['POIDS', 'COEFF', 'COEFFICIENT', 'IMPORTANCE', 'CHARGE'],
@@ -5825,7 +5928,7 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       blocage: ['BLOCAGE', 'RESERVE', 'RESERVES', 'POINTBLOQUANT', 'ALERTE']
     };
 
-    let mapCol = { phase: 0, titre: 1, domaine: 2, poids: -1, statut: 3, commentaire: 4, blocage: 5 };
+    let mapCol = { machine: -1, phase: 0, titre: 1, domaine: 2, poids: -1, statut: 3, commentaire: 4, blocage: 5 };
     let idxEntete = -1;
 
     for (let k = 0; k < Math.min(lignes.length, 8); k++) {
@@ -5849,7 +5952,20 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
     const phasesMap = new Map();
     const phases = [];
     const taches = [];
+    const machinesMap = new Map();
+    const machines = [];
     let dernierePhaseNom = 'Tâches du chantier';
+    let derniereMachineNom = '';
+
+    function obtenirMachine(nom) {
+      const propre = String(nom || 'Machine 1').trim() || 'Machine 1';
+      const cle = norm(propre) || 'MACHINE1';
+      if (machinesMap.has(cle)) return machinesMap.get(cle);
+      const m = { id: uid('mc'), nom: propre, ref: '' };
+      machinesMap.set(cle, m);
+      machines.push(m);
+      return m;
+    }
 
     function obtenirPhase(nom) {
       const propre = String(nom || 'Tâches du chantier').trim() || 'Tâches du chantier';
@@ -5870,6 +5986,8 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
 
       let nomPhase = lireCol(row, mapCol.phase);
       let titre = lireCol(row, mapCol.titre);
+      let nomMachine = lireCol(row, mapCol.machine);
+      if (nomMachine) derniereMachineNom = nomMachine;
 
       // Si une ligne n'a que la 1re colonne remplie alors que d'autres lignes ont 2+ colonnes, c'est un sous-titre de phase
       if (!titre && nomPhase && nonVides.length === 1) {
@@ -5892,8 +6010,10 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       const bloc = lireCol(row, mapCol.blocage);
       const stFinal = bloc && statut === 'afaire' ? 'bloque' : statut;
 
+      const mc = derniereMachineNom ? obtenirMachine(derniereMachineNom) : null;
       taches.push({
         id: uid('tc'),
+        machineId: mc ? mc.id : '',
         phaseId: ph.id,
         titre: titre,
         domaine: dom,
@@ -5911,7 +6031,7 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       });
     });
 
-    return { phases: phases, taches: taches };
+    return { phases: phases, taches: taches, machines: machines };
   }
 
   /* ===================== 3. Lecteur .xlsx sans dépendance =============== */
@@ -6118,8 +6238,8 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       try {
         const lignes = await lireXlsx(b);
         const res = depuisLignesTableur(lignes);
-        if (!res.taches.length) return { erreur: 'Aucune tâche trouvée dans le classeur Excel (colonnes conseillées : Phase, Tâche, Domaine, Statut, Commentaire).' };
-        return { type: 'taches', phases: res.phases, taches: res.taches };
+        if (!res.taches.length) return { erreur: 'Aucune tâche trouvée dans le classeur Excel (colonnes conseillées : Machine, Phase, Tâche, Domaine, Statut, Commentaire).' };
+        return { type: 'taches', phases: res.phases, taches: res.taches, machines: res.machines || [] };
       } catch (e) {
         return { erreur: 'Impossible de lire le classeur Excel : ' + ((e && e.message) || e) };
       }
@@ -6148,7 +6268,7 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
           return { type: 'chantier', chantier: data.chantier, reglages: data.reglages || null };
         }
         if (data && Array.isArray(data.taches)) {
-          return { type: 'taches', phases: Array.isArray(data.phases) ? data.phases : [], taches: data.taches };
+          return { type: 'taches', phases: Array.isArray(data.phases) ? data.phases : [], taches: data.taches, machines: Array.isArray(data.machines) ? data.machines : [] };
         }
         if (Array.isArray(data)) {
           const res = analyserTexte(data.map(x => typeof x === 'string' ? x : (x.titre || x.nom || '')).join('\n'));
@@ -6161,28 +6281,27 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
     const prem = texte.split(/\r?\n/)[0] || '';
     if (prem.indexOf(';') >= 0 || prem.indexOf('\t') >= 0 || (prem.indexOf(',') >= 0 && /phase|lot|tache|tâche|statut|designation|désignation/i.test(prem))) {
       const res = depuisLignesTableur(decouperCSV(texte));
-      if (res.taches.length) return { type: 'taches', phases: res.phases, taches: res.taches };
+      if (res.taches.length) return { type: 'taches', phases: res.phases, taches: res.taches, machines: res.machines || [] };
     }
 
     // Sinon : liste texte simple
     const resTxt = analyserTexte(texte);
     if (!resTxt.taches.length) return { erreur: 'Aucune tâche reconnue dans ce fichier.' };
-    return { type: 'taches', phases: resTxt.phases, taches: resTxt.taches };
+    return { type: 'taches', phases: resTxt.phases, taches: resTxt.taches, machines: resTxt.machines || [] };
   }
 
   /* ===================== 5. Modèle CSV téléchargeable =================== */
   function modeleCSV() {
     const lignes = [
-      'Phase;Tâche;Domaine;Poids;Statut;Commentaire',
-      '1. Réception & Implantation;Contrôle de la zone d\'implantation et traçage au sol;Mécanique;1;À faire;',
-      '1. Réception & Implantation;Déchargement et manutention des sous-ensembles en zone;Mécanique;2;À faire;',
-      '2. Montage mécanique;Assemblage, alignement et mise à niveau des châssis;Mécanique;3;À faire;',
-      '2. Montage mécanique;Fixation au sol (chevillage chimique) et montage carters;Mécanique;2;À faire;',
-      '3. Câblage électrique & pneumatique;Raccordement puissance 400V et inter-châssis;Électrique;3;À faire;',
-      '3. Câblage électrique & pneumatique;Raccordement réseau pneumatique et mise sous pression;Mécanique;1;À faire;',
-      '4. Automatisme & Sécurités;Test de la chaîne des arrêts d\'urgence et barrières immatérielles;Automatisme;2;À faire;',
-      '4. Automatisme & Sécurités;Tests E/S capteurs et sens de rotation moteurs;Automatisme;2;À faire;',
-      '5. Essais & Mise en route;Essais à vide puis montée en cadence avec produits client;Automatisme;3;À faire;'
+      'Machine;Phase;Tâche;Domaine;Poids;Statut;Commentaire',
+      'Machine 1;1. Réception & Implantation;Contrôle de la zone d\'implantation et traçage au sol;Mécanique;1;À faire;',
+      'Machine 1;1. Réception & Implantation;Déchargement et manutention des sous-ensembles en zone;Mécanique;2;À faire;',
+      'Machine 1;2. Montage mécanique;Assemblage, alignement et mise à niveau des châssis;Mécanique;3;À faire;',
+      'Machine 1;2. Montage mécanique;Fixation au sol (chevillage chimique) et montage carters;Mécanique;2;À faire;',
+      'Machine 2;2. Montage mécanique;Assemblage, alignement et mise à niveau des châssis;Mécanique;3;À faire;',
+      'Machine 2;3. Câblage électrique & pneumatique;Raccordement puissance 400V et inter-châssis;Électrique;3;À faire;',
+      'Machine 2;4. Automatisme & Sécurités;Test de la chaîne des arrêts d\'urgence et barrières immatérielles;Automatisme;2;À faire;',
+      'Machine 2;5. Essais & Mise en route;Essais à vide puis montée en cadence avec produits client;Automatisme;3;À faire;'
     ];
     return new Blob(['\uFEFF' + lignes.join('\r\n')], { type: 'text/csv;charset=utf-8' });
   }
@@ -6327,6 +6446,27 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
     TIERS:  { libelle: 'Tiers / Fourn.',    court: 'TIERS / FOURN.', couleur: '#b45309' }
   };
 
+  /* Rôles technicien BFR autorisés (affichés tels quels sur les rapports) */
+  const ROLES_TECHNICIEN = ['Metteur au point', 'Automaticien', 'Électrotechnicien'];
+
+  function roleTechnicien(chantier, reglages) {
+    const c = chantier || {};
+    const s = reglages || {};
+    const t = s.technicien || {};
+    const brut = valeur(c.technicienRole) || valeur(t.fonction);
+    if (!brut) return '';
+    // Normalisation : on ne conserve que les 3 rôles officiels (anciens libellés ignorés)
+    const trouve = ROLES_TECHNICIEN.find(r => r.toLowerCase() === brut.toLowerCase());
+    return trouve || '';
+  }
+
+  function nomTechnicien(chantier, reglages) {
+    const c = chantier || {};
+    const s = reglages || {};
+    const t = s.technicien || {};
+    return valeur(c.responsable) || nomComplet(t) || 'Équipe BFR Systems';
+  }
+
   function poidsTache(t) {
     const p = Number(t && t.poids);
     return (p === 2 || p === 3) ? p : 1;
@@ -6429,6 +6569,35 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
     const prenom = valeur(t.prenom), nom = valeur(t.nom);
     if (prenom && nom) return prenom + ' ' + nom.toUpperCase();
     return prenom || nom;
+  }
+
+  /* ===================== Machines de l'intervention ================== */
+  /** Liste normalisée des machines du chantier (au moins 1 pour la rétrocompatibilité). */
+  function machinesChantier(chantier) {
+    const c = chantier || {};
+    const liste = Array.isArray(c.machines) ? c.machines.filter(m => m && (m.id || m.nom)) : [];
+    if (!liste.length) {
+      return [{ id: 'defaut', nom: 'Machine 1', ref: '' }];
+    }
+    return liste.map((m, i) => ({
+      id: m.id || ('mc_' + i),
+      nom: valeur(m.nom) || ('Machine ' + (i + 1)),
+      ref: valeur(m.ref)
+    }));
+  }
+
+  /** Identifiant machine effectif d'une tâche (les anciennes tâches sans machineId vont sur la 1re machine). */
+  function machineIdTache(tache, chantier) {
+    const machines = machinesChantier(chantier);
+    const id = tache && tache.machineId ? String(tache.machineId) : '';
+    if (id && machines.some(m => m.id === id)) return id;
+    return machines[0].id;
+  }
+
+  function nomMachine(chantier, machineId) {
+    const machines = machinesChantier(chantier);
+    const m = machines.find(x => x.id === machineId);
+    return m ? m.nom : (machines[0] ? machines[0].nom : 'Machine 1');
   }
 
   function lignesPiedPage(s) {
@@ -6606,6 +6775,30 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
     phases.forEach(p => { mapPhase[p.id] = p.nom; });
     const nomPhase = (t) => mapPhase[t.phaseId] || phases[0].nom || 'Chantier';
 
+    // Machines de l'intervention (chaque machine a ses propres tâches)
+    const machines = machinesChantier(c);
+    const mapMachine = {};
+    machines.forEach(m => { mapMachine[m.id] = m.nom; });
+    const nomMachineFn = (t) => mapMachine[machineIdTache(t, c)] || machines[0].nom;
+    const parMachine = machines.map(m => {
+      const ts = taches.filter(t => machineIdTache(t, c) === m.id);
+      const pTot = ts.reduce((s, t) => s + poidsTache(t), 0);
+      const pAcq = ts.reduce((s, t) => s + acquisTache(t), 0);
+      return {
+        id: m.id,
+        nom: m.nom,
+        ref: m.ref || '',
+        taches: ts,
+        total: ts.length,
+        fait: ts.filter(t => t.statut === 'fait').length,
+        encours: ts.filter(t => t.statut === 'encours').length,
+        bloque: ts.filter(t => t.statut === 'bloque').length,
+        afaire: ts.filter(t => !t.statut || t.statut === 'afaire').length,
+        faitCeJour: ts.filter(t => t.statut === 'fait' && t.faitLe === d).length,
+        pct: pTot ? Math.round((pAcq / pTot) * 100) : 0
+      };
+    });
+
     const faitTotal = taches.filter(t => t.statut === 'fait');
     const faitCeJour = faitTotal.filter(t => t.faitLe === d);
     const faitAvant = faitTotal.filter(t => t.faitLe !== d);
@@ -6700,7 +6893,7 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
     taches.forEach(t => {
       (t.historiqueBlocages || []).forEach(h => {
         if (!h) return;
-        const item = { tache: t, phaseNom: nomPhase(t), hist: h };
+        const item = { tache: t, phaseNom: nomPhase(t), machineNom: nomMachineFn(t), hist: h };
         blocagesLevesTotal.push(item);
         if (h.leveLe === d) blocagesLevesCeJour.push(item);
       });
@@ -6753,6 +6946,9 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       pctGlobal: pctGlobal,
       parPhase: parPhase,
       nomPhase: nomPhase,
+      machines: machines,
+      parMachine: parMachine,
+      nomMachine: nomMachineFn,
       nbPhotosJour: nbPhotosJour,
       nbPhotosInterne: nbPhotosInterne
     };
@@ -6845,15 +7041,16 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
         p.y += 20;
       }
 
-      // Bandeau compact « Votre contact BFR Systems » sur 2 colonnes équilibrées
+      // Bandeau compact « Technicien BFR Systems » : nom + prénom + rôle uniquement
       const t = s.technicien || {};
-      const respNom = valeur(c.responsable) || nomComplet(t) || 'Équipe BFR Systems';
-      const respCoord = [valeur(t.fonction) || 'Chargé de chantier BFR', valeur(t.tel) ? 'Tél. ' + valeur(t.tel) : '', valeur(t.email)].filter(Boolean).join('  ·  ');
+      const respNom = nomTechnicien(c, s);
+      const roleTech = roleTechnicien(c, s);
+      const respCoord = [roleTech, valeur(t.tel) ? 'Tél. ' + valeur(t.tel) : '', valeur(t.email)].filter(Boolean).join('  ·  ');
       const equipeTxt = valeur(b.jour.equipeJour) || valeur(c.equipe);
       const hContact = equipeTxt ? 44 : 32;
       p.rect(this.M, p.y, this.CW, hContact, { fill: C.bandeau, stroke: C.bord, lineWidth: 0.6 });
       p.rect(this.M, p.y, 3.5, hContact, { fill: CYAN });
-      p.text('VOTRE INTERLOCUTEUR CHANTIER BFR SYSTEMS :', this.M + 10, p.y + 11, { size: 7.6, font: 'F2', color: C.gris, bold: true });
+      p.text('TECHNICIEN BFR SYSTEMS :', this.M + 10, p.y + 11, { size: 7.6, font: 'F2', color: C.gris, bold: true });
       p.text(Pdf.trunc(respNom + (respCoord ? '  —  ' + respCoord : ''), this.CW - 18, 9.6, true), this.M + 10, p.y + 23.5, { size: 9.6, font: 'F2', color: C.texte, bold: true });
       if (equipeTxt) {
         p.text(Pdf.trunc('Équipe présente sur site : ' + equipeTxt + (valeur(b.jour.horaires) ? '  |  Horaires : ' + valeur(b.jour.horaires) : ''), this.CW - 18, 8.8),
@@ -7019,6 +7216,48 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
         p.text(Pdf.trunc(k.lib, caseW - 6, 7.5), x + caseW / 2, yKpi + 28, { size: 7.5, color: C.gris, align: 'center' });
       });
       p.y = yKpi + 42;
+
+      // 2b. Avancement par machine (si plusieurs machines sur l'intervention)
+      const machinesActives = (b.parMachine || []).filter(m => m.total > 0);
+      if (machinesActives.length > 1) {
+        const hEntM = 18, hRowM = 20;
+        this.saut(hEntM + hRowM * Math.min(2, machinesActives.length) + 8);
+        const colNomM = Math.round(this.CW * 0.48);
+        const colBarreM = Math.round(this.CW * 0.28);
+        const colStatM = this.CW - colNomM - colBarreM;
+        const dessinerEnteteMachines = () => {
+          const y = p.y;
+          p.rect(this.M, y, this.CW, hEntM, { fill: C.cyanClair, stroke: C.bordFort, lineWidth: 0.5 });
+          p.text('Machine de l\'intervention', this.M + 7, y + 12.2, { size: 8.5, font: 'F2', color: C.navy, bold: true });
+          p.text('Progression', this.M + colNomM + 7, y + 12.2, { size: 8.5, font: 'F2', color: C.navy, bold: true });
+          p.text('État', this.M + colNomM + colBarreM + colStatM - 7, y + 12.2, { size: 8.5, font: 'F2', color: C.navy, align: 'right', bold: true });
+          p.y = y + hEntM;
+        };
+        dessinerEnteteMachines();
+        machinesActives.forEach(m => {
+          if (p.y + hRowM > this.limiteBas()) {
+            p.newPage();
+            this.enteteSuite();
+            dessinerEnteteMachines();
+          }
+          const y = p.y;
+          p.rect(this.M, y, this.CW, hRowM, { fill: [1, 1, 1], stroke: C.bord, lineWidth: 0.4 });
+          p.text(Pdf.trunc(m.nom, colNomM - 14, 9.0, true), this.M + 7, y + 13.2, { size: 9.0, font: 'F2', color: C.texte, bold: true });
+          const bx = this.M + colNomM + 7, by = y + 6.5, bw = colBarreM - 46, bh = 7;
+          p.rect(bx, by, bw, bh, { fill: [0.92, 0.94, 0.96], stroke: C.bord, lineWidth: 0.3 });
+          if (m.pct > 0) {
+            p.rect(bx, by, Math.max(2, (bw * m.pct) / 100), bh, { fill: m.pct >= 100 ? hexRgb('#15803d') : CYAN });
+          }
+          p.text(m.pct + ' %', bx + bw + 6, y + 13, { size: 8.4, font: 'F2', color: m.pct >= 100 ? hexRgb('#15803d') : C.navy, bold: true });
+          let resumeM = m.fait + '/' + m.total + ' fait';
+          if (m.bloque) resumeM += ' · ' + m.bloque + ' bloq.';
+          else if (m.faitCeJour) resumeM += ' (+' + m.faitCeJour + ' auj.)';
+          p.text(Pdf.trunc(resumeM, colStatM - 10, 8.3), this.W - this.M - 7, y + 13,
+            { size: 8.3, color: m.bloque ? hexRgb('#b91c1c') : C.gris, align: 'right' });
+          p.y = y + hRowM;
+        });
+        p.y += 8;
+      }
 
       // 3. Tableau d'avancement par Phase / Lot (s'il y a au moins 1 tâche)
       const phasesActives = b.parPhase.filter(ph => ph.total > 0);
@@ -7231,7 +7470,8 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       p.rect(this.M, y0, this.CW, 16, { fill: fond });
       p.rect(this.M, y0, 3.8, hCarte, { fill: coul });
 
-      const metaGauche = phNom + (domNom ? '  ·  ' + domNom : '');
+      const mcNom = b.nomMachine ? b.nomMachine(t) : '';
+      const metaGauche = ((b.machines && b.machines.length > 1 && mcNom) ? (mcNom + '  ·  ') : '') + phNom + (domNom ? '  ·  ' + domNom : '');
       p.text(Pdf.trunc(metaGauche, this.CW * 0.58, 8.3, true), this.M + 9, y0 + 11.2, { size: 8.3, font: 'F2', color: coul, bold: true });
 
       let badgeDroite = st.court;
@@ -7288,7 +7528,7 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       p.rect(this.M, y0, this.CW, 16, { fill: fond });
       p.rect(this.M, y0, 3.8, hCarte, { fill: coul });
 
-      p.text(Pdf.trunc(item.phaseNom + '  ·  ' + orig.libelle, this.CW * 0.62, 8.2, true), this.M + 9, y0 + 11.2, { size: 8.2, font: 'F2', color: coul, bold: true });
+      p.text(Pdf.trunc(((item.machineNom ? item.machineNom + '  ·  ' : '') + item.phaseNom + '  ·  ' + orig.libelle), this.CW * 0.62, 8.2, true), this.M + 9, y0 + 11.2, { size: 8.2, font: 'F2', color: coul, bold: true });
       p.text('POINT BLOQUANT LEVE CE JOUR', this.W - this.M - 8, y0 + 11.2, { size: 7.8, font: 'F2', color: coul, align: 'right', bold: true });
 
       let yc = y0 + 27.5;
@@ -7306,7 +7546,7 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       p.y = y0 + hCarte + 5;
     }
 
-    /* Tableau synthétique complet de toutes les tâches du chantier */
+    /* Tableau synthétique complet de toutes les tâches du chantier (groupé par machine puis par phase) */
     blocChecklistComplete() {
       const p = this.pdf, C = this.C, b = this.bilan;
       const phasesNonVides = b.parPhase.filter(ph => ph.taches.length > 0);
@@ -7330,7 +7570,38 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
 
       tracerEntete();
 
-      phasesNonVides.forEach(ph => {
+      const machinesActives = (b.parMachine || []).filter(m => m.total > 0);
+      const multiMachines = machinesActives.length > 1;
+      const ordreMachines = multiMachines ? machinesActives : [null];
+
+      ordreMachines.forEach(mc => {
+        if (multiMachines) {
+          if (p.y + 36 > this.limiteBas()) {
+            p.newPage();
+            this.enteteSuite();
+            tracerEntete();
+          }
+          const ym = p.y;
+          p.rect(this.M, ym, this.CW, 18, { fill: CYAN, stroke: C.bordFort, lineWidth: 0.5 });
+          p.text(Pdf.trunc(mc.nom, this.CW * 0.72, 9.2, true), this.M + 6, ym + 12.4, { size: 9.2, font: 'F2', color: C.blanc, bold: true });
+          p.text(mc.fait + '/' + mc.total + ' (' + mc.pct + ' %)', this.W - this.M - 6, ym + 12.4, { size: 8.4, font: 'F2', color: C.blanc, align: 'right' });
+          p.y = ym + 18;
+        }
+        const phasesPourMachine = phasesNonVides.map(ph => ({
+          id: ph.id,
+          nom: ph.nom,
+          taches: ph.taches.filter(t => !mc || machineIdTache(t, this.c) === mc.id)
+        })).filter(ph => ph.taches.length > 0);
+        // Recalcul des compteurs par phase pour cette machine
+        phasesPourMachine.forEach(ph => {
+          const pTot = ph.taches.reduce((s, t) => s + poidsTache(t), 0);
+          const pAcq = ph.taches.reduce((s, t) => s + acquisTache(t), 0);
+          ph.total = ph.taches.length;
+          ph.fait = ph.taches.filter(t => t.statut === 'fait').length;
+          ph.pct = pTot ? Math.round((pAcq / pTot) * 100) : 0;
+        });
+
+        phasesPourMachine.forEach(ph => {
         if (p.y + 36 > this.limiteBas()) {
           p.newPage();
           this.enteteSuite();
@@ -7375,6 +7646,7 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
 
           p.y = y + hRow;
         });
+        });
       });
       p.y += 8;
     }
@@ -7403,6 +7675,7 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       this.kv([
         ['Chantier / Projet', valeur(c.nom) || '—', !valeur(c.equipement)],
         ['Équipement / Ligne', valeur(c.equipement)],
+        ['Machines de l\'intervention', (b.machines || []).map(m => m.nom).join(' · ') || '—'],
         ['N° d\'affaire', valeur(c.affaire)],
         ['Dates prévisionnelles', [frDate(c.dateDebut), frDate(c.dateFinPrevue)].filter(Boolean).join(' au ')],
         ['Lieu d\'intervention', valeur(c.client && c.client.lieu) || valeur(c.client && c.client.adresse)]
@@ -7519,11 +7792,18 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
     }
 
     const t = s.technicien || {};
-    const respNom = valeur(c.responsable) || nomComplet(t) || 'Équipe BFR Systems';
+    const respNom = nomTechnicien(c, s);
+    const roleTech = roleTechnicien(c, s);
     doc.para([
-      { t: 'Interlocuteur BFR Systems : ', gras: true, couleur: '332E72' },
-      { t: respNom + (valeur(t.tel) ? ' · Tél. ' + valeur(t.tel) : '') + (valeur(t.email) ? ' · ' + valeur(t.email) : '') }
+      { t: 'Technicien BFR Systems : ', gras: true, couleur: '332E72' },
+      { t: respNom + (roleTech ? ' — ' + roleTech : '') + (valeur(t.tel) ? ' · Tél. ' + valeur(t.tel) : '') + (valeur(t.email) ? ' · ' + valeur(t.email) : '') }
     ], { encadre: true, apres: 180 });
+    if ((b.machines || []).length) {
+      doc.para([
+        { t: 'Machines de l\'intervention : ', gras: true, couleur: '332E72' },
+        { t: b.machines.map(m => m.nom).join(' · ') }
+      ], { apres: 140 });
+    }
 
     let numSec = 1;
     doc.bandeau((numSec++) + '. SYNTHÈSE & AVANCEMENT GLOBAL', '06BAF2', b.pctGlobal + ' % (' + b.faitTotal.length + '/' + b.total + ')');
@@ -7578,8 +7858,9 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       if (valeur(b.jour.aleas)) doc.para(b.jour.aleas, { couleur: '991B1B', gras: true, apres: 100 });
       for (const tc of b.bloques) {
         const orig = ORIGINES_BLOCAGE[tc.blocageOrigine || 'CLIENT'] || ORIGINES_BLOCAGE.CLIENT;
+        const prefMc = (b.machines && b.machines.length > 1) ? (b.nomMachine(tc) + ' · ') : '';
         doc.para([
-          { t: '[' + orig.libelle + ' · ' + b.nomPhase(tc) + '] ', gras: true, couleur: 'B91C1C' },
+          { t: '[' + orig.libelle + ' · ' + prefMc + b.nomPhase(tc) + '] ', gras: true, couleur: 'B91C1C' },
           { t: tc.titre, gras: true }
         ], { apres: 30 });
         const detBloq = [
@@ -7610,8 +7891,9 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
     if (b.faitCeJour.length) {
       for (const tc of b.faitCeJour) {
         const wP = poidsTache(tc);
+        const prefMc = (b.machines && b.machines.length > 1) ? (b.nomMachine(tc) + ' · ') : '';
         doc.para([
-          { t: '✓ [' + b.nomPhase(tc) + '] ', gras: true, couleur: '15803D' },
+          { t: '✓ [' + prefMc + b.nomPhase(tc) + '] ', gras: true, couleur: '15803D' },
           { t: tc.titre + (wP > 1 ? ' (×' + wP + ')' : ''), gras: true }
         ], { apres: 30 });
         if (valeur(tc.commentaire)) doc.para(tc.commentaire, { couleur: '475569', apres: 80 });
@@ -7624,8 +7906,9 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
     if (b.enCours.length || valeur(b.jour.prevuDemain)) {
       doc.bandeau((numSec++) + '. EN COURS & PROGRAMME PRÉVU DEMAIN', '06BAF2');
       for (const tc of b.enCours) {
+        const prefMc = (b.machines && b.machines.length > 1) ? (b.nomMachine(tc) + ' · ') : '';
         doc.para([
-          { t: '• [' + b.nomPhase(tc) + '] ', gras: true, couleur: 'B45309' },
+          { t: '• [' + prefMc + b.nomPhase(tc) + '] ', gras: true, couleur: 'B45309' },
           { t: tc.titre + (tc.progression ? ' (' + tc.progression + ' %)' : '') },
           tc.commentaire ? { t: ' — ' + tc.commentaire, couleur: '64748B' } : { t: '' }
         ], { apres: 50 });
@@ -7645,21 +7928,26 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
 
     if ((!s.rapport || s.rapport.inclureChecklist !== false) && b.total > 0) {
       doc.bandeau((numSec++) + '. ÉTAT RÉCAPITULATIF DE LA CHECKLIST', '06BAF2', b.pctGlobal + ' %');
+      const multiMc = (b.machines || []).length > 1;
       const lignesTab = [[
-        { texte: 'Phase / Lot', gras: true, couleur: '332E72', fond: 'EAF8FD' },
-        { texte: 'Tâche', gras: true, couleur: '332E72', fond: 'EAF8FD' },
+        { texte: multiMc ? 'Machine' : 'Phase / Lot', gras: true, couleur: '332E72', fond: 'EAF8FD' },
+        { texte: multiMc ? 'Phase / Lot — Tâche' : 'Tâche', gras: true, couleur: '332E72', fond: 'EAF8FD' },
         { texte: 'Statut', gras: true, align: 'center', couleur: '332E72', fond: 'EAF8FD' },
         { texte: 'Date', gras: true, align: 'center', couleur: '332E72', fond: 'EAF8FD' }
       ]];
-      b.parPhase.forEach(ph => {
-        ph.taches.forEach(tc => {
-          const st = STATUTS[tc.statut] || STATUTS.afaire;
-          lignesTab.push([
-            { texte: ph.nom, taille: 9.5, couleur: '475569' },
-            { texte: tc.titre, taille: 9.5 },
-            { texte: st.court, gras: true, taille: 9, align: 'center', couleur: st.couleur.replace('#', '').toUpperCase() },
-            { texte: tc.statut === 'fait' ? (tc.faitLe === b.dateJour ? 'Ce jour' : frDateCourte(tc.faitLe)) : '—', taille: 9, align: 'center', couleur: '64748B' }
-          ]);
+      const machinesActives = (b.parMachine || []).filter(m => m.total > 0);
+      const ordreMc = multiMc ? machinesActives : [null];
+      ordreMc.forEach(mc => {
+        b.parPhase.forEach(ph => {
+          ph.taches.filter(tc => !mc || machineIdTache(tc, c) === mc.id).forEach(tc => {
+            const st = STATUTS[tc.statut] || STATUTS.afaire;
+            lignesTab.push([
+              { texte: multiMc ? mc.nom : ph.nom, taille: 9.5, couleur: '475569' },
+              { texte: multiMc ? (ph.nom + ' — ' + tc.titre) : tc.titre, taille: 9.5 },
+              { texte: st.court, gras: true, taille: 9, align: 'center', couleur: st.couleur.replace('#', '').toUpperCase() },
+              { texte: tc.statut === 'fait' ? (tc.faitLe === b.dateJour ? 'Ce jour' : frDateCourte(tc.faitLe)) : '—', taille: 9, align: 'center', couleur: '64748B' }
+            ]);
+          });
         });
       });
       doc.tableau(lignesTab, { largeurs: [24, 48, 15, 13] });
@@ -7703,7 +7991,10 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
     const s = reglages || {};
     const b = calculerBilan(c, dateJour);
     const t = s.technicien || {};
-    const signataire = valeur(c.responsable) || nomComplet(t) || 'Équipe BFR Systems';
+    const signataire = nomTechnicien(c, s);
+    const roleTech = roleTechnicien(c, s);
+    const multiMc = (b.machines || []).length > 1;
+    const prefMc = (tc) => multiMc ? (b.nomMachine(tc) + ' — ') : '';
 
     const lignes = [];
     lignes.push('Bonjour,');
@@ -7713,9 +8004,17 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
     if (valeur(c.client && c.client.nom)) {
       lignes.push('• Client / Site : ' + valeur(c.client.nom) + (valeur(c.client.lieu) ? ' — ' + valeur(c.client.lieu) : ''));
     }
+    if ((b.machines || []).length) {
+      lignes.push('• Machines : ' + b.machines.map(m => m.nom).join(' · '));
+    }
     lignes.push('• Journée : Jour ' + b.numeroJour + (b.nbJoursTotal > 1 ? ' / ' + b.nbJoursTotal : '') + ' — ' + frDate(b.dateJour));
     lignes.push('• Avancement global : ' + b.pctGlobal + ' % (' + b.faitTotal.length + ' / ' + b.total + ' tâches terminées)' +
       (b.nbJoursTotal > 1 && b.cadence && b.cadence.actif ? ' — ' + b.cadence.libelle + ' (délai J' + b.numeroJour + '/' + b.nbJoursTotal + ' : ' + b.cadence.pctDelai + '%)' : ''));
+    if (multiMc) {
+      (b.parMachine || []).filter(m => m.total > 0).forEach(m => {
+        lignes.push('  - ' + m.nom + ' : ' + m.pct + ' % (' + m.fait + '/' + m.total + ')');
+      });
+    }
     lignes.push('');
 
     if (valeur(b.jour.synthese)) {
@@ -7734,11 +8033,11 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
           valeur(tc.bloqueDepuis) ? 'depuis le ' + frDateCourte(tc.bloqueDepuis) : '',
           valeur(tc.blocageDuree) ? 'attente ' + valeur(tc.blocageDuree) : ''
         ].filter(Boolean).join(' · ');
-        lignes.push('- [' + orig.libelle.toUpperCase() + ' — ' + b.nomPhase(tc) + '] ' + tc.titre + (details ? ' → ' + details : ''));
+        lignes.push('- [' + orig.libelle.toUpperCase() + ' — ' + prefMc(tc) + b.nomPhase(tc) + '] ' + tc.titre + (details ? ' → ' + details : ''));
       });
       b.blocagesLevesCeJour.forEach(it => {
         const orig = ORIGINES_BLOCAGE[it.hist.origine || 'CLIENT'] || ORIGINES_BLOCAGE.CLIENT;
-        lignes.push('✓ [LEVÉ CE JOUR — ' + orig.libelle + '] ' + it.tache.titre +
+        lignes.push('✓ [LEVÉ CE JOUR — ' + orig.libelle + '] ' + (it.machineNom ? it.machineNom + ' — ' : '') + it.tache.titre +
           (it.hist.debutLe ? ' (bloqué le ' + frDateCourte(it.hist.debutLe) + (valeur(it.hist.duree) ? ', attente ' + valeur(it.hist.duree) : '') + ')' : ''));
       });
       lignes.push('');
@@ -7747,7 +8046,7 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
     lignes.push('RÉALISÉ CE JOUR (' + b.faitCeJour.length + ') :');
     if (b.faitCeJour.length > 0) {
       b.faitCeJour.forEach(tc => {
-        lignes.push('✓ [' + b.nomPhase(tc) + '] ' + tc.titre + (valeur(tc.commentaire) ? ' (' + valeur(tc.commentaire) + ')' : ''));
+        lignes.push('✓ [' + prefMc(tc) + b.nomPhase(tc) + '] ' + tc.titre + (valeur(tc.commentaire) ? ' (' + valeur(tc.commentaire) + ')' : ''));
       });
     } else {
       lignes.push('- Travaux en cours (aucune tâche clôturée définitivement ce jour).');
@@ -7757,7 +8056,7 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
     if (b.enCours.length > 0 || valeur(b.jour.prevuDemain)) {
       lignes.push('EN COURS & PRÉVU DEMAIN :');
       b.enCours.forEach(tc => {
-        lignes.push('• [En cours' + (tc.progression ? ' ' + tc.progression + '%' : '') + '] ' + tc.titre);
+        lignes.push('• [En cours' + (tc.progression ? ' ' + tc.progression + '%' : '') + '] ' + prefMc(tc) + tc.titre);
       });
       if (valeur(b.jour.prevuDemain)) {
         lignes.push(valeur(b.jour.prevuDemain));
@@ -7767,7 +8066,7 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
 
     lignes.push('Cordialement,');
     lignes.push(signataire);
-    lignes.push((valeur(t.fonction) || 'Chantier & Mise en service') + ' — BFR SYSTEMS');
+    lignes.push((roleTech ? roleTech + ' — ' : '') + 'BFR SYSTEMS');
     if (valeur(t.tel)) lignes.push('Tél. : ' + valeur(t.tel));
 
     return lignes.join('\n');
@@ -7777,6 +8076,12 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
     STATUTS: STATUTS,
     DOMAINES: DOMAINES,
     ORIGINES_BLOCAGE: ORIGINES_BLOCAGE,
+    ROLES_TECHNICIEN: ROLES_TECHNICIEN,
+    roleTechnicien: roleTechnicien,
+    nomTechnicien: nomTechnicien,
+    machinesChantier: machinesChantier,
+    machineIdTache: machineIdTache,
+    nomMachine: nomMachine,
     poidsTache: poidsTache,
     grouperPhotosPourRapport: grouperPhotosPourRapport,
     frDate: frDate,
@@ -8146,7 +8451,7 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
     technicien: {
       prenom: '',
       nom: '',
-      fonction: 'Chargé de chantier / Montage',
+      fonction: 'Automaticien',
       tel: '',
       email: ''
     },
@@ -8182,6 +8487,14 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
     const auj = aujourdhuiISO();
     const modele = ImportTaches.depuisModele(opts.modeleId || 'vierge');
     const dests = ((S && S.mail && S.mail.destinatairesDefaut) || []).map(d => Object.assign({}, d, { id: uid('dst'), actif: true }));
+    // Machines de l'intervention : chaque machine possède ses propres tâches
+    let machinesInit = (modele.machines && modele.machines.length)
+      ? modele.machines.map(m => ({ id: m.id || uid('mc'), nom: m.nom || 'Machine', ref: m.ref || '' }))
+      : [{ id: uid('mc'), nom: 'Machine 1', ref: '' }];
+    const mcDefaut = machinesInit[0].id;
+    (modele.taches || []).forEach(tc => {
+      if (!tc.machineId || !machinesInit.some(m => m.id === tc.machineId)) tc.machineId = mcDefaut;
+    });
     return {
       id: uid('ch'),
       estDemo: !!opts.estDemo,
@@ -8193,6 +8506,8 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       inclureWeekEnd: false,
       joursExclus: [],
       responsable: Report.nomComplet(S && S.technicien) || '',
+      technicienRole: (S && S.technicien && S.technicien.fonction) || '',
+      machines: machinesInit,
       equipe: '',
       client: {
         nom: '',
@@ -8223,7 +8538,8 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
     ch.affaire = 'AFF-2026-118';
     ch.equipement = 'Cellule d\'encaissage haute cadence + Convoyage amont/aval';
     ch.dateDebut = j1;
-    ch.responsable = Report.nomComplet(S.technicien) || 'Technicien Chantier BFR';
+    ch.responsable = Report.nomComplet(S.technicien) || 'Julien DURAND';
+    ch.technicienRole = (S.technicien && S.technicien.fonction) || 'Automaticien';
     ch.equipe = '2 monteurs-câbleurs BFR';
     ch.client = {
       nom: 'Laiterie du Val d\'Ain',
@@ -8247,6 +8563,32 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
     const pad2 = (n) => ('0' + n).slice(-2);
     ch.dateFinPrevue = dFin.getFullYear() + '-' + pad2(dFin.getMonth() + 1) + '-' + pad2(dFin.getDate());
     ch.inclureWeekEnd = true;
+
+    // Démonstration multi-machines : Machine 1 (encaisseuse) + Machine 2 (convoyeur aval)
+    const mc1 = ch.machines[0].id;
+    const mc2 = uid('mc');
+    ch.machines = [
+      { id: mc1, nom: 'Machine 1 — Encaisseuse', ref: 'ENC-01' },
+      { id: mc2, nom: 'Machine 2 — Convoyeur aval', ref: 'CONV-02' }
+    ];
+    (ch.taches || []).forEach(tc => { tc.machineId = mc1; });
+    // 4 tâches propres à la Machine 2 (dupliquées du modèle, statuts indépendants)
+    const phMeca = ch.phases.find(ph => /Montage/.test(ph.nom)) || ch.phases[1] || ch.phases[0];
+    const phElec = ch.phases.find(ph => /Câblage/.test(ph.nom)) || ch.phases[2] || ch.phases[0];
+    const phAuto = ch.phases.find(ph => /Automatisme/.test(ph.nom)) || ch.phases[3] || ch.phases[0];
+    const tachesMc2 = [
+      { titre: 'Mise en place et alignement du convoyeur aval', phaseId: phMeca.id, domaine: 'MECANIQUE', poids: 2, statut: 'fait', faitLe: j2, progression: 100, commentaire: 'Convoyeur aval aligné sur l\'encaisseuse.' },
+      { titre: 'Raccordement puissance 400V du convoyeur aval', phaseId: phElec.id, domaine: 'ELECTRIQUE', poids: 2, statut: 'encours', progression: 50, commentaire: 'Câble tiré, reste la connexion au sectionneur.' },
+      { titre: 'Test des cellules de transfert Machine 2', phaseId: phAuto.id, domaine: 'AUTOMATISME', poids: 2, statut: 'afaire', progression: 0, commentaire: '' },
+      { titre: 'Essai de transfert cartons Machine 1 vers Machine 2', phaseId: phAuto.id, domaine: 'AUTOMATISME', poids: 3, statut: 'afaire', progression: 0, commentaire: '' }
+    ];
+    tachesMc2.forEach(x => {
+      ch.taches.push({
+        id: uid('tc'), machineId: mc2, phaseId: x.phaseId, titre: x.titre, domaine: x.domaine, poids: x.poids,
+        statut: x.statut, progression: x.progression, faitLe: x.faitLe || '', commentaire: x.commentaire,
+        blocage: '', blocageOrigine: '', bloqueDepuis: '', blocageDuree: '', historiqueBlocages: [], photos: []
+      });
+    });
 
     const ts = ch.taches;
     [0, 1, 2, 3].forEach(i => { if (ts[i]) { ts[i].statut = 'fait'; ts[i].faitLe = j1; ts[i].progression = 100; } });
@@ -8307,6 +8649,7 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
   let S = chargerReglages();
   let C = null;
   let filtreStatut = 'tous';  // 'tous' | 'afaire' | 'encours' | 'bloque' | 'fait_auj' | 'fait'
+  let filtreMachineId = 'toutes'; // 'toutes' | id machine
   let rechercheTexte = '';
   let timerSauvegarde = null;
   let dicteeActive = null;
@@ -8335,6 +8678,69 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       C.jours[d].creeManuellement = true;
     }
     return C.jours[d];
+  }
+
+  /* ===================== Machines de l'intervention ================= */
+  /** Garantit C.machines (au moins 1) et assigne machineId aux tâches orphelines. */
+  function assurerMachines(chantier) {
+    const c = chantier || C;
+    if (!c) return [];
+    if (!Array.isArray(c.machines) || !c.machines.length) {
+      c.machines = [{ id: uid('mc'), nom: 'Machine 1', ref: '' }];
+    }
+    c.machines = c.machines.filter(m => m && (m.id || m.nom)).map((m, i) => ({
+      id: m.id || uid('mc'),
+      nom: (m.nom || '').trim() || ('Machine ' + (i + 1)),
+      ref: (m.ref || '').trim()
+    }));
+    const ids = new Set(c.machines.map(m => m.id));
+    const defaut = c.machines[0].id;
+    (c.taches || []).forEach(tc => {
+      if (!tc.machineId || !ids.has(tc.machineId)) tc.machineId = defaut;
+    });
+    return c.machines;
+  }
+
+  function nomMachineParId(id) {
+    const machines = assurerMachines(C);
+    const m = machines.find(x => x.id === id);
+    return m ? m.nom : (machines[0] ? machines[0].nom : 'Machine 1');
+  }
+
+  function machineIdTacheCourante(tc) {
+    return Report.machineIdTache(tc, C);
+  }
+
+  /** Copie propre d'une tâche pour duplication (statut réinitialisé, photos non copiées). */
+  function clonerTachePourMachine(source, cibleMachineId) {
+    return {
+      id: uid('tc'),
+      machineId: cibleMachineId,
+      phaseId: source.phaseId,
+      titre: source.titre,
+      domaine: source.domaine || '',
+      poids: Report.poidsTache(source),
+      statut: 'afaire',
+      progression: 0,
+      faitLe: '',
+      commentaire: '',
+      blocage: '',
+      blocageOrigine: '',
+      bloqueDepuis: '',
+      blocageDuree: '',
+      historiqueBlocages: [],
+      photos: []
+    };
+  }
+
+  /** Duplique toutes les tâches d'une machine source vers une machine cible. Retourne le nombre copié. */
+  function dupliquerTachesMachine(sourceId, cibleId) {
+    if (!sourceId || !cibleId || sourceId === cibleId) return 0;
+    const sources = (C.taches || []).filter(tc => machineIdTacheCourante(tc) === sourceId);
+    if (!sources.length) return 0;
+    const copies = sources.map(tc => clonerTachePourMachine(tc, cibleId));
+    C.taches = (C.taches || []).concat(copies);
+    return copies.length;
   }
 
   /** Vérifie si un jour n'a strictement aucune note, photo, envoi ou tâche pointée. */
@@ -8656,18 +9062,23 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
         ${C.equipement ? `<div style="color:var(--bfr-text-muted);font-size:12.5px">⚙️ ${esc(C.equipement)}</div>` : ''}
         ${txtDates ? `<div style="color:var(--bfr-text-muted);font-size:12.5px;margin-top:2px">📅 ${txtDates}</div>` : ''}
         <div style="color:var(--bfr-text-muted);font-size:12.5px;margin-top:2px">
+          🏭 Machines : <strong style="color:var(--bfr-secondary)">${(bilan.machines || []).map(m => esc(m.nom)).join(' · ') || 'Machine 1'}</strong>
+        </div>
+        <div style="color:var(--bfr-text-muted);font-size:12.5px;margin-top:2px">
           📧 Destinataires rapport : <strong style="color:var(--bfr-secondary)">${destActifs.length ? destActifs.length + ' personne' + (destActifs.length > 1 ? 's' : '') : 'aucun e-mail configuré'}</strong>
           ${cli.contact ? ` · Contact site : ${esc(cli.contact)}` : ''}
         </div>
       </div>
       <div class="btnrow">
         <button type="button" class="btn sm ghost" data-a="editer-chantier">${ICO.pen(14)} Chantier & Dates</button>
+        <button type="button" class="btn sm ghost" data-a="gerer-machines">🏭 Machines (${(bilan.machines || []).length})</button>
         <button type="button" class="btn sm ghost" data-a="editer-destinataires">${ICO.mail(15)} Destinataires (${destActifs.length})</button>
       </div>
     </div>`;
   }
 
   function tacheCorrespondFiltre(t, dateJour) {
+    if (filtreMachineId && filtreMachineId !== 'toutes' && machineIdTacheCourante(t) !== filtreMachineId) return false;
     if (filtreStatut === 'afaire' && (t.statut && t.statut !== 'afaire')) return false;
     if (filtreStatut === 'encours' && t.statut !== 'encours') return false;
     if (filtreStatut === 'bloque' && t.statut !== 'bloque') return false;
@@ -8690,14 +9101,33 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
   function rendreTaches(bilan) {
     const el = $('#zoneTaches');
     if (!el) return;
+    const machines = assurerMachines(C);
+    if (filtreMachineId !== 'toutes' && !machines.some(m => m.id === filtreMachineId)) filtreMachineId = 'toutes';
+    const multiMachines = machines.length > 1;
+    // Comptes par machine pour les pastilles
+    const compteParMachine = {};
+    machines.forEach(m => { compteParMachine[m.id] = 0; });
+    (C.taches || []).forEach(tc => {
+      const mid = machineIdTacheCourante(tc);
+      compteParMachine[mid] = (compteParMachine[mid] || 0) + 1;
+    });
+    // Totaux filtrés par machine active (pour les filtres statut)
+    const tachesFiltreesMachine = filtreMachineId === 'toutes'
+      ? (C.taches || [])
+      : (C.taches || []).filter(tc => machineIdTacheCourante(tc) === filtreMachineId);
+    const nbFaitF = tachesFiltreesMachine.filter(x => x.statut === 'fait').length;
+    const nbEncF = tachesFiltreesMachine.filter(x => x.statut === 'encours').length;
+    const nbBloqF = tachesFiltreesMachine.filter(x => x.statut === 'bloque').length;
+    const nbAfaireF = tachesFiltreesMachine.filter(x => !x.statut || x.statut === 'afaire').length;
+    const nbFaitAujF = tachesFiltreesMachine.filter(x => x.statut === 'fait' && x.faitLe === bilan.dateJour).length;
 
     const filtres = [
-      { id: 'tous', lib: 'Toutes', n: bilan.total },
-      { id: 'afaire', lib: 'À faire', n: bilan.aFaire.length },
-      { id: 'encours', lib: 'En cours', n: bilan.enCours.length },
-      { id: 'bloque', lib: 'Bloquées', n: bilan.bloques.length, cls: 'bloque' },
-      { id: 'fait_auj', lib: 'Faites ce jour', n: bilan.faitCeJour.length },
-      { id: 'fait', lib: 'Terminées', n: bilan.faitTotal.length }
+      { id: 'tous', lib: 'Toutes', n: tachesFiltreesMachine.length },
+      { id: 'afaire', lib: 'À faire', n: nbAfaireF },
+      { id: 'encours', lib: 'En cours', n: nbEncF },
+      { id: 'bloque', lib: 'Bloquées', n: nbBloqF, cls: 'bloque' },
+      { id: 'fait_auj', lib: 'Faites ce jour', n: nbFaitAujF },
+      { id: 'fait', lib: 'Terminées', n: nbFaitF }
     ];
 
     let corpsPhases = '';
@@ -8713,11 +9143,17 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
     } else {
       let nbAffichees = 0;
       bilan.parPhase.forEach(ph => {
-        const visibles = ph.taches.filter(t => tacheCorrespondFiltre(t, bilan.dateJour));
-        if (!visibles.length && (filtreStatut !== 'tous' || rechercheTexte)) return;
+        const tachesPhaseFiltrees = ph.taches.filter(t => filtreMachineId === 'toutes' || machineIdTacheCourante(t) === filtreMachineId);
+        const visibles = tachesPhaseFiltrees.filter(t => tacheCorrespondFiltre(t, bilan.dateJour));
+        if (!visibles.length && (filtreStatut !== 'tous' || rechercheTexte || filtreMachineId !== 'toutes')) return;
         nbAffichees += visibles.length;
-        const pliee = !!(C.phasesPliees && C.phasesPliees[ph.id]) && filtreStatut === 'tous' && !rechercheTexte;
-        const complet = ph.total > 0 && ph.fait === ph.total;
+        const pliee = !!(C.phasesPliees && C.phasesPliees[ph.id]) && filtreStatut === 'tous' && !rechercheTexte && filtreMachineId === 'toutes';
+        const totPh = tachesPhaseFiltrees.length;
+        const faitPh = tachesPhaseFiltrees.filter(x => x.statut === 'fait').length;
+        const pTotPh = tachesPhaseFiltrees.reduce((s, x) => s + Report.poidsTache(x), 0);
+        const pAcqPh = tachesPhaseFiltrees.reduce((s, x) => s + (x.statut === 'fait' ? Report.poidsTache(x) : (x.statut === 'encours' ? Report.poidsTache(x) * (Math.min(95, Math.max(5, Number(x.progression) || 50)) / 100) : 0)), 0);
+        const pctPh = pTotPh ? Math.round((pAcqPh / pTotPh) * 100) : 0;
+        const complet = totPh > 0 && faitPh === totPh;
 
         corpsPhases += `<div class="phase-bloc${pliee ? ' pliee' : ''}" data-phase-id="${esc(ph.id)}">
           <div class="phase-hdr" data-a="plier-phase" data-id="${esc(ph.id)}">
@@ -8726,8 +9162,8 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
               <span class="phase-titre">${esc(ph.nom)}</span>
             </div>
             <div class="phase-hdr-right">
-              <span class="phase-stat${complet ? ' complet' : ''}">${ph.fait}/${ph.total}</span>
-              <span class="phase-minibar${complet ? ' complet' : ''}"><span style="width:${ph.pct}%"></span></span>
+              <span class="phase-stat${complet ? ' complet' : ''}">${faitPh}/${totPh}</span>
+              <span class="phase-minibar${complet ? ' complet' : ''}"><span style="width:${pctPh}%"></span></span>
               <button type="button" class="phase-add-btn" data-a="ajouter-tache-phase" data-phase="${esc(ph.id)}" title="Ajouter une tâche dans cette phase">+</button>
             </div>
           </div>
@@ -8737,7 +9173,7 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
         </div>`;
       });
 
-      if (!nbAffichees && (filtreStatut !== 'tous' || rechercheTexte)) {
+      if (!nbAffichees && (filtreStatut !== 'tous' || rechercheTexte || filtreMachineId !== 'toutes')) {
         corpsPhases = `<div style="padding:18px;text-align:center;color:var(--bfr-text-muted);font-size:13.5px;background:#f8fafc;border-radius:8px;border:1px dashed var(--bfr-border)">
           Aucune tâche ne correspond au filtre sélectionné.
           <div style="margin-top:8px"><button type="button" class="btn sm grey" data-filtre-rapide="tous">Afficher toutes les tâches</button></div>
@@ -8751,12 +9187,28 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
           ${ICO.checklist(19, 'ico-cyan')} Checklist du chantier
         </h2>
         <div style="display:flex;gap:6px">
+          <button type="button" class="btn sm ghost" data-a="gerer-machines" title="Gérer les machines et dupliquer les tâches">🏭 Machines</button>
           <button type="button" class="btn sm ghost" data-a="gerer-phases" title="Gérer les phases / lots">Phases</button>
           <button type="button" class="btn sm ghost" data-a="ouvrir-import" title="Importer ou coller des tâches">${ICO.upload(14)} Importer</button>
         </div>
       </div>
 
       ${bilan.total > 0 ? `
+      <div class="machine-bar" role="tablist" aria-label="Filtrer par machine">
+        <button type="button" class="machine-chip ${filtreMachineId === 'toutes' ? 'on' : ''}" data-machine-filtre="toutes" title="Afficher les tâches de toutes les machines">
+          🏭 Toutes <span class="cnt">${bilan.total}</span>
+        </button>
+        ${machines.map(m => {
+          const pm = (bilan.parMachine || []).find(x => x.id === m.id);
+          return `<button type="button" class="machine-chip ${filtreMachineId === m.id ? 'on' : ''}" data-machine-filtre="${esc(m.id)}" title="${esc(m.nom)} — ${pm ? pm.pct : 0} %">
+            ${esc(m.nom)} <span class="cnt">${compteParMachine[m.id] || 0}</span>${pm ? ` <span class="pct">${pm.pct}%</span>` : ''}
+          </button>`;
+        }).join('')}
+        <button type="button" class="machine-chip ajout" data-a="ajouter-machine" title="Ajouter une machine à cette intervention">+ Machine</button>
+      </div>
+      ${multiMachines ? `<div class="machine-actions">
+        <button type="button" class="btn sm ghost" data-a="dupliquer-machines">⧉ Dupliquer les tâches vers une autre machine</button>
+      </div>` : ''}
       <div class="filtres-wrap">
         <div class="filtres-scroll">
           ${filtres.map(f => `<button type="button" class="filtre-chip ${f.cls || ''}${filtreStatut === f.id ? ' on' : ''}" data-filtre-rapide="${f.id}">
@@ -8810,6 +9262,9 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
     }
 
     const domLabel = Report.DOMAINES[t.domaine] || '';
+    const machines = assurerMachines(C);
+    const multiMachines = machines.length > 1;
+    const mcNom = nomMachineParId(machineIdTacheCourante(t));
 
     return `<div class="tache-item st-${esc(st)}" data-tache-id="${esc(t.id)}">
       <button type="button" class="tache-check-zone" data-a="cocher-tache" data-id="${esc(t.id)}" aria-label="Cocher la tâche">
@@ -8818,6 +9273,7 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       <div class="tache-main" data-a="ouvrir-tache" data-id="${esc(t.id)}">
         <div class="tache-titre">${esc(t.titre)}</div>
         <div class="tache-meta">
+          ${multiMachines ? `<span class="tache-tag machine">🏭 ${esc(mcNom)}</span>` : ''}
           ${badgeStatut}
           ${leveeCeJour && st !== 'bloque' ? `<span class="tache-tag leve">🔓 Blocage levé</span>` : ''}
           ${wPoids > 1 ? `<span class="tache-tag poids">×${wPoids}</span>` : ''}
@@ -9256,6 +9712,7 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
 
   function rendreTout() {
     if (!C) return;
+    assurerMachines(C);
     synchroniserDatesChantier(C);
     const bilan = Report.calculerBilan(C, C.jourActif);
     rendreTopbar(bilan);
@@ -9322,9 +9779,13 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
     const phases = (C.phases && C.phases.length) ? C.phases : [{ id: uid('ph'), nom: 'Tâches du chantier' }];
     if (!C.phases || !C.phases.length) C.phases = phases;
 
+    const machinesTache = assurerMachines(C);
+    const machineDefautTache = (filtreMachineId !== 'toutes' && machinesTache.some(m => m.id === filtreMachineId))
+      ? filtreMachineId : machinesTache[0].id;
     let t = estNouvelle
       ? {
           id: uid('tc'),
+          machineId: machineDefautTache,
           phaseId: phaseParDefaut || phases[0].id,
           titre: '',
           domaine: '',
@@ -9346,6 +9807,7 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
 
     function synchroniserChamps(panneau) {
       const elTitre = $('#tcTitre', panneau); if (elTitre) t.titre = elTitre.value;
+      const elMc = $('#tcMachine', panneau); if (elMc) t.machineId = elMc.value;
       const elPh = $('#tcPhase', panneau); if (elPh) t.phaseId = elPh.value;
       const elDom = $('#tcDomaine', panneau); if (elDom) t.domaine = elDom.value;
       const elComm = $('#tcComm', panneau); if (elComm) t.commentaire = elComm.value;
@@ -9371,6 +9833,13 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
         <div class="field">
           <label>Intitulé de la tâche *</label>
           <textarea id="tcTitre" rows="2" placeholder="Ex. Raccordement puissance 400V armoire principale…">${esc(t.titre)}</textarea>
+        </div>
+
+        <div class="field">
+          <label>🏭 Machine de l'intervention</label>
+          <select id="tcMachine">
+            ${assurerMachines(C).map(m => `<option value="${esc(m.id)}"${m.id === (t.machineId || machinesTache[0].id) ? ' selected' : ''}>${esc(m.nom)}${m.ref ? ' (' + esc(m.ref) + ')' : ''}</option>`).join('')}
+          </select>
         </div>
 
         <div class="grid2">
@@ -9481,6 +9950,15 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
         <div class="field">
           ${construireBlocPhotosHtml(t.photos || [], 'tc', 'Photos sur cette tâche')}
         </div>
+
+        ${!estNouvelle && assurerMachines(C).length > 1 ? `
+        <div class="field" style="margin-top:10px">
+          <label>⧉ Dupliquer cette tâche vers une autre machine</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            ${assurerMachines(C).filter(m => m.id !== (t.machineId || machinesTache[0].id)).map(m => `<button type="button" class="btn sm ghost" data-act="dupliquer-tache-vers" data-cible="${esc(m.id)}">→ ${esc(m.nom)}</button>`).join('')}
+          </div>
+          <p class="hint" style="margin:6px 0 0">La copie repart « À faire » (statut et photos réinitialisés).</p>
+        </div>` : ''}
 
         <div class="btnrow" style="margin-top:12px">
           <button type="button" class="btn grey" data-a="fermer">Annuler</button>
@@ -9598,6 +10076,18 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
             rendreTout();
             toast('Tâche supprimée');
           }
+        } else if (nomAct === 'dupliquer-tache-vers') {
+          synchroniserChamps(panneau);
+          if (!t.titre.trim()) { toast('Indiquez l\'intitulé avant de dupliquer'); return; }
+          const cibleId = act.dataset.cible;
+          const copie = clonerTachePourMachine(t, cibleId);
+          copie.titre = t.titre.trim();
+          C.taches = C.taches || [];
+          C.taches.push(copie);
+          planifierSauvegarde();
+          overlay.remove();
+          rendreTout();
+          toast('⧉ Tâche dupliquée vers ' + nomMachineParId(cibleId));
         } else if (nomAct === 'enregistrer-tache') {
           synchroniserChamps(panneau);
           if (!t.titre.trim()) {
@@ -9616,6 +10106,119 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
           planifierSauvegarde();
           overlay.remove();
           rendreTout();
+        }
+      });
+    });
+  }
+
+  /* ===================== Gestion des Machines & Duplication ========= */
+  function feuilleMachines() {
+    assurerMachines(C);
+    function dessiner(panneau) {
+      const bilan = Report.calculerBilan(C, C.jourActif);
+      const machines = C.machines || [];
+      panneau.innerHTML = `
+        <div class="grab"></div>
+        <h3>Machines de l'intervention</h3>
+        <p class="sub">Chaque machine possède ses propres tâches. Ajoutez une 2e machine puis dupliquez en 1 appui les tâches de la 1re machine.</p>
+
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">
+          ${machines.map((m, idx) => {
+            const pm = (bilan.parMachine || []).find(x => x.id === m.id) || { total: 0, fait: 0, pct: 0, bloque: 0 };
+            return `<div class="machine-carte">
+              <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                <span class="machine-num">🏭 ${idx + 1}</span>
+                <input type="text" data-mc-nom="${idx}" value="${esc(m.nom)}" style="flex:1;min-width:140px;padding:7px 10px;border:1px solid var(--bfr-border);border-radius:6px;font-weight:600" aria-label="Nom de la machine">
+                <input type="text" data-mc-ref="${idx}" value="${esc(m.ref || '')}" placeholder="Réf. (ex. ENC-01)" style="width:110px;padding:7px 10px;border:1px solid var(--bfr-border);border-radius:6px" aria-label="Référence machine">
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap">
+                <span class="pill">${pm.fait}/${pm.total} · ${pm.pct} %</span>
+                ${pm.bloque ? `<span class="pill def">${pm.bloque} bloqué${pm.bloque > 1 ? 's' : ''}</span>` : ''}
+                <div style="flex:1;min-width:80px">
+                  <div class="phase-minibar" style="width:100%"><span style="width:${pm.pct}%"></span></div>
+                </div>
+                ${machines.length > 1 ? `<button type="button" class="btn sm danger" data-mc-suppr="${idx}" style="padding:4px 8px;min-height:32px">${ICO.trash(14)}</button>` : ''}
+              </div>
+              ${machines.length > 1 ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+                ${machines.filter(x => x.id !== m.id).map(x => `<button type="button" class="btn sm ghost" data-mc-dup="${idx}" data-mc-cible="${esc(x.id)}" title="Copier les ${pm.total} tâches de ${esc(m.nom)} vers ${esc(x.nom)} (statuts réinitialisés)">⧉ Dupliquer vers ${esc(x.nom)}</button>`).join('')}
+              </div>` : `<p class="hint" style="margin:8px 0 0">Ajoutez une 2e machine ci-dessous pour pouvoir dupliquer les tâches en 1 appui.</p>`}
+            </div>`;
+          }).join('')}
+        </div>
+
+        <div style="display:flex;gap:8px;margin-bottom:14px">
+          <input type="text" id="nouvMachineNom" placeholder="Nom de la nouvelle machine (ex. Machine 2 — Convoyeur)…" style="flex:1;padding:10px 12px;border:1.5px solid var(--bfr-border);border-radius:8px">
+          <button type="button" class="btn principal sm" data-mc-ajouter="1">${ICO.plus(16)} Ajouter</button>
+        </div>
+
+        <button type="button" class="btn wide" data-a="fermer">Terminé</button>`;
+
+      $$('[data-mc-nom]', panneau).forEach(inp => {
+        inp.addEventListener('input', () => {
+          const i = Number(inp.dataset.mcNom);
+          if (C.machines[i]) { C.machines[i].nom = inp.value; planifierSauvegarde(); }
+        });
+      });
+      $$('[data-mc-ref]', panneau).forEach(inp => {
+        inp.addEventListener('input', () => {
+          const i = Number(inp.dataset.mcRef);
+          if (C.machines[i]) { C.machines[i].ref = inp.value; planifierSauvegarde(); }
+        });
+      });
+    }
+
+    Ouvrir.ouvrir('<div class="panel"></div>', (panneau) => {
+      dessiner(panneau);
+      panneau.addEventListener('click', async (e) => {
+        if (e.target.closest('[data-mc-ajouter]')) {
+          const inp = $('#nouvMachineNom', panneau);
+          const v = (inp && inp.value || '').trim();
+          if (!v) { toast('Saisissez le nom de la machine'); return; }
+          C.machines.push({ id: uid('mc'), nom: v, ref: '' });
+          planifierSauvegarde();
+          dessiner(panneau);
+          toast('Machine ajoutée');
+          return;
+        }
+        const dup = e.target.closest('[data-mc-dup]');
+        if (dup) {
+          const i = Number(dup.dataset.mcDup);
+          const source = C.machines[i];
+          const cibleId = dup.dataset.mcCible;
+          if (!source) return;
+          const nb = (C.taches || []).filter(tc => machineIdTacheCourante(tc) === source.id).length;
+          if (!nb) { toast('Aucune tâche à dupliquer sur ' + source.nom); return; }
+          const ok = await Dialogue.confirmer(
+            'Dupliquer les ' + nb + ' tâche(s) de « ' + source.nom + ' » vers « ' + nomMachineParId(cibleId) + ' » ?\nLes copies repartent « À faire » (statuts et photos réinitialisés).',
+            { ok: 'Dupliquer' }
+          );
+          if (!ok) return;
+          const n = dupliquerTachesMachine(source.id, cibleId);
+          planifierSauvegarde();
+          dessiner(panneau);
+          rendreTout();
+          toast('⧉ ' + n + ' tâche(s) dupliquée(s) vers ' + nomMachineParId(cibleId));
+          return;
+        }
+        const s = e.target.closest('[data-mc-suppr]');
+        if (s) {
+          const i = Number(s.dataset.mcSuppr);
+          const m = C.machines[i];
+          if (!m) return;
+          if (C.machines.length <= 1) { toast('Il faut conserver au moins une machine'); return; }
+          const nb = (C.taches || []).filter(tc => machineIdTacheCourante(tc) === m.id).length;
+          const ok = await Dialogue.confirmer(
+            'Supprimer « ' + m.nom + ' » ?' + (nb ? '\nSes ' + nb + ' tâche(s) seront également supprimées.' : ''),
+            { ok: 'Supprimer', danger: true }
+          );
+          if (!ok) return;
+          C.machines.splice(i, 1);
+          C.taches = (C.taches || []).filter(tc => machineIdTacheCourante(tc) !== m.id);
+          if (filtreMachineId === m.id) filtreMachineId = 'toutes';
+          planifierSauvegarde();
+          dessiner(panneau);
+          rendreTout();
+          toast('Machine supprimée');
         }
       });
     });
@@ -9698,13 +10301,41 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
 
   /* ===================== Import de tâches & Modèles BFR =============== */
   function integrerTachesImportees(res, remplacer) {
+    assurerMachines(C);
+    const machinesImportees = Array.isArray(res.machines) ? res.machines : [];
     if (remplacer) {
       C.phases = res.phases.length ? res.phases : [{ id: uid('ph'), nom: 'Tâches du chantier' }];
-      C.taches = res.taches;
+      if (machinesImportees.length) {
+        C.machines = machinesImportees.map(m => ({ id: m.id || uid('mc'), nom: m.nom || 'Machine', ref: m.ref || '' }));
+      } else if (!C.machines || !C.machines.length) {
+        C.machines = [{ id: uid('mc'), nom: 'Machine 1', ref: '' }];
+      }
+      const idsMc = new Set(C.machines.map(m => m.id));
+      const defautMc = C.machines[0].id;
+      C.taches = (res.taches || []).map(tc => {
+        if (!tc.machineId || !idsMc.has(tc.machineId)) tc.machineId = defautMc;
+        return tc;
+      });
       C.estDemo = false;
     } else {
       C.phases = C.phases || [];
       C.taches = C.taches || [];
+      // Machines importées : fusion par nom normalisé
+      const mapMc = {};
+      C.machines.forEach(m => { mapMc[ImportTaches.norm(m.nom)] = m.id; });
+      const remapMc = {};
+      machinesImportees.forEach(m => {
+        const cle = ImportTaches.norm(m.nom);
+        if (mapMc[cle]) remapMc[m.id] = mapMc[cle];
+        else {
+          const nm = { id: m.id || uid('mc'), nom: m.nom || 'Machine', ref: m.ref || '' };
+          C.machines.push(nm);
+          mapMc[cle] = nm.id;
+          remapMc[m.id] = nm.id;
+        }
+      });
+      const defautMc = (filtreMachineId !== 'toutes' && C.machines.some(m => m.id === filtreMachineId))
+        ? filtreMachineId : C.machines[0].id;
       const mapPh = {};
       C.phases.forEach(p => { mapPh[ImportTaches.norm(p.nom)] = p.id; });
       const remap = {};
@@ -9713,9 +10344,10 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
         if (mapPh[cle]) remap[p.id] = mapPh[cle];
         else { C.phases.push(p); mapPh[cle] = p.id; remap[p.id] = p.id; }
       });
-      res.taches.forEach(t => {
-        t.phaseId = remap[t.phaseId] || (C.phases[0] && C.phases[0].id);
-        C.taches.push(t);
+      res.taches.forEach(tc => {
+        tc.phaseId = remap[tc.phaseId] || (C.phases[0] && C.phases[0].id);
+        tc.machineId = (tc.machineId && remapMc[tc.machineId]) ? remapMc[tc.machineId] : (tc.machineId && C.machines.some(m => m.id === tc.machineId) ? tc.machineId : defautMc);
+        C.taches.push(tc);
       });
       C.estDemo = false;
     }
@@ -9740,7 +10372,7 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
 
         ${onglet === 'texte' ? `
           <div class="card" style="margin-bottom:10px">
-            <p class="hint" style="margin-top:0">Collez votre liste (depuis un mail, Word, Notes ou WhatsApp). Astuce : une ligne finissant par <strong>:</strong> ou précédée de <strong>#</strong> crée une Phase/Lot, et <strong>[x2]</strong> / <strong>[x3]</strong> définit la pondération !</p>
+            <p class="hint" style="margin-top:0">Collez votre liste (depuis un mail, Word, Notes ou WhatsApp). Astuce : <strong>MACHINE: Machine 2</strong> crée une machine, une ligne finissant par <strong>:</strong> ou précédée de <strong>#</strong> crée une Phase/Lot, et <strong>[x2]</strong> / <strong>[x3]</strong> définit la pondération !</p>
             <textarea id="txtImportColler" rows="8" placeholder="# 1. Montage mécanique\n- Mise en place et alignement châssis [x3]\n- Chevillage au sol [x2]\n\n# 2. Câblage & Automatisme\n- Raccordement 400V [x2]\n- Test chaîne des arrêts d'urgence [x3]" style="width:100%;font-size:13.5px"></textarea>
             <div style="margin-top:8px;display:flex;align-items:center;gap:8px">
               <input type="checkbox" id="chkRemplacerTxt" ${(C.taches || []).length === 0 || C.estDemo ? 'checked' : ''}>
@@ -9889,11 +10521,16 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
         <div id="apercuPlanningDates" class="sticky-note" style="margin-bottom:10px;background:var(--bfr-primary-light);border-color:var(--bfr-primary-border);color:var(--bfr-secondary);font-size:12.5px"></div>
 
         <div class="grid2">
-          <div class="field"><label>Responsable chantier BFR</label>
-            <input type="text" data-ck="responsable" value="${esc(C.responsable || Report.nomComplet(S.technicien) || '')}" placeholder="Prénom NOM"></div>
-          <div class="field"><label>Équipe / Collègues sur site</label>
-            <input type="text" data-ck="equipe" value="${esc(C.equipe || '')}" placeholder="Ex. M. Martin, P. Bernard"></div>
+          <div class="field"><label>Technicien BFR — Nom Prénom</label>
+            <input type="text" data-ck="responsable" value="${esc(C.responsable || Report.nomComplet(S.technicien) || '')}" placeholder="Ex. Julien DURAND"></div>
+          <div class="field"><label>Rôle du technicien</label>
+            <select data-ck="technicienRole">
+              <option value="">— Choisir le rôle —</option>
+              ${Report.ROLES_TECHNICIEN.map(r => `<option value="${esc(r)}"${(C.technicienRole || (S.technicien && S.technicien.fonction)) === r ? ' selected' : ''}>${esc(r)}</option>`).join('')}
+            </select></div>
         </div>
+        <div class="field"><label>Équipe / Collègues sur site</label>
+          <input type="text" data-ck="equipe" value="${esc(C.equipe || '')}" placeholder="Ex. M. Martin, P. Bernard"></div>
       </div>
 
       <div class="card">
@@ -10359,16 +10996,23 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
     const b = Report.calculerBilan(C, C.jourActif);
     const j = assurerJour(C.jourActif);
     const parties = [];
+    const multiMc = (b.machines || []).length > 1;
+    const pref = (tc) => multiMc ? ('[' + b.nomMachine(tc) + '] ') : '';
     if (b.faitCeJour.length) {
-      parties.push('Travaux réalisés ce jour (' + b.faitCeJour.length + ') : ' + b.faitCeJour.map(t => t.titre).join(' ; ') + '.');
+      parties.push('Travaux réalisés ce jour (' + b.faitCeJour.length + ') : ' + b.faitCeJour.map(tc => pref(tc) + tc.titre).join(' ; ') + '.');
     }
     if (b.enCours.length) {
-      parties.push('En cours : ' + b.enCours.map(t => t.titre + (t.progression ? ' (' + t.progression + '%)' : '')).join(' ; ') + '.');
+      parties.push('En cours : ' + b.enCours.map(tc => pref(tc) + tc.titre + (tc.progression ? ' (' + tc.progression + '%)' : '')).join(' ; ') + '.');
     }
     if (b.bloques.length) {
-      parties.push('Points bloquants à lever : ' + b.bloques.map(t => t.titre + (t.blocage ? ' (' + t.blocage + ')' : '')).join(' ; ') + '.');
+      parties.push('Points bloquants à lever : ' + b.bloques.map(tc => pref(tc) + tc.titre + (tc.blocage ? ' (' + tc.blocage + ')' : '')).join(' ; ') + '.');
     }
     parties.push('Avancement global du chantier : ' + b.pctGlobal + ' % (' + b.faitTotal.length + '/' + b.total + ').');
+    if (multiMc) {
+      (b.parMachine || []).filter(m => m.total > 0).forEach(m => {
+        parties.push(m.nom + ' : ' + m.pct + ' % (' + m.fait + '/' + m.total + ').');
+      });
+    }
     j.synthese = parties.join('\n');
     planifierSauvegarde();
     rendreTout();
@@ -10383,7 +11027,8 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       toast('Toutes les tâches sont déjà terminées !');
       return;
     }
-    j.prevuDemain = suite.map(t => '• ' + (t.statut === 'encours' ? 'Poursuite : ' : '') + t.titre).join('\n');
+    const multiMc2 = (b.machines || []).length > 1;
+    j.prevuDemain = suite.map(tc => '• ' + (multiMc2 ? ('[' + b.nomMachine(tc) + '] ') : '') + (tc.statut === 'encours' ? 'Poursuite : ' : '') + tc.titre).join('\n');
     planifierSauvegarde();
     rendreTout();
     toast('Programme du lendemain pré-rempli');
@@ -10641,6 +11286,11 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
         <span><strong>Mes chantiers</strong><small>Changer de chantier, en créer un nouveau ou archiver</small></span>
       </button>
 
+      <button type="button" class="menu-item" data-m="machines">
+        <span class="ico">🏭</span>
+        <span><strong>Machines &amp; Duplication des tâches</strong><small>Ajouter une machine, renommer, dupliquer les tâches en 1 appui</small></span>
+      </button>
+
       <button type="button" class="menu-item" data-m="import">
         <span class="ico">${ICO.upload(18)}</span>
         <span><strong>Importer des tâches (.xlsx, .csv, texte)</strong><small>Charger une liste préparée au bureau ou un modèle BFR</small></span>
@@ -10648,7 +11298,7 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
 
       <button type="button" class="menu-item" data-m="identite">
         <span class="ico">${ICO.user(18)}</span>
-        <span><strong>Mes informations (Intervenant BFR)</strong><small>${esc(Report.nomComplet(S.technicien) || 'Nom, téléphone et e-mail affichés sur les rapports')}</small></span>
+        <span><strong>Mes informations (Technicien BFR)</strong><small>${esc(Report.nomComplet(S.technicien) || 'Nom, prénom et rôle affichés sur les rapports')}</small></span>
       </button>
 
       <button type="button" class="menu-item" data-m="reglages">
@@ -10671,6 +11321,7 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
         const action = bm.dataset.m;
         overlay.remove();
         if (action === 'mes-chantiers') feuilleMesChantiers();
+        else if (action === 'machines') feuilleMachines();
         else if (action === 'import') feuilleImport('texte');
         else if (action === 'identite') feuilleIdentite();
         else if (action === 'reglages') feuilleReglages();
@@ -10822,14 +11473,18 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
     const html = `<div class="panel">
       <div class="grab"></div>
       <h3>Mes informations</h3>
-      <p class="sub">Conservées sur votre téléphone et reprises automatiquement dans l'encadré « Votre interlocuteur BFR Systems » de chaque rapport quotidien.</p>
+      <p class="sub">Conservées sur votre téléphone et reprises automatiquement dans l'encadré « Technicien BFR Systems » de chaque rapport quotidien (nom, prénom et rôle uniquement).</p>
 
       <div class="card">
         <div class="grid2">
           <div class="field"><label>Prénom</label><input type="text" id="idPrenom" value="${esc(t.prenom || '')}" placeholder="Ex. Julien"></div>
           <div class="field"><label>Nom</label><input type="text" id="idNom" value="${esc(t.nom || '')}" placeholder="Ex. DURAND"></div>
         </div>
-        <div class="field"><label>Fonction</label><input type="text" id="idFonction" value="${esc(t.fonction || '')}" placeholder="Ex. Chargé de chantier / Automaticien BFR"></div>
+        <div class="field"><label>Rôle du technicien</label>
+          <select id="idFonction">
+            <option value="">— Choisir le rôle —</option>
+            ${Report.ROLES_TECHNICIEN.map(r => `<option value="${esc(r)}"${t.fonction === r ? ' selected' : ''}>${esc(r)}</option>`).join('')}
+          </select></div>
         <div class="grid2">
           <div class="field"><label>Téléphone</label><input type="tel" id="idTel" value="${esc(t.tel || '')}" placeholder="06 12 34 56 78"></div>
           <div class="field"><label>E-mail BFR</label><input type="email" id="idEmail" value="${esc(t.email || '')}" placeholder="prenom.nom@bfr-systems.fr"></div>
@@ -10851,6 +11506,7 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
         };
         sauverReglages();
         if (!C.responsable || C.estDemo) C.responsable = Report.nomComplet(S.technicien);
+        if (!C.technicienRole || C.estDemo) C.technicienRole = S.technicien.fonction;
         planifierSauvegarde();
         overlay.remove();
         rendreTout();
@@ -10948,6 +11604,13 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
         return;
       }
 
+      const btnMachineFiltre = e.target.closest('[data-machine-filtre]');
+      if (btnMachineFiltre) {
+        filtreMachineId = btnMachineFiltre.dataset.machineFiltre;
+        rendreTout();
+        return;
+      }
+
       const btnDic = e.target.closest('[data-dictee]');
       if (btnDic) {
         const zone = $('#' + btnDic.dataset.dictee);
@@ -10979,6 +11642,12 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       } else if (a === 'vider-recherche') {
         rechercheTexte = '';
         rendreTaches(Report.calculerBilan(C, C.jourActif));
+      } else if (a === 'gerer-machines') {
+        feuilleMachines();
+      } else if (a === 'ajouter-machine') {
+        feuilleMachines();
+      } else if (a === 'dupliquer-machines') {
+        feuilleMachines();
       } else if (a === 'gerer-phases') {
         feuillePhases();
       } else if (a === 'ouvrir-import') {
@@ -11064,6 +11733,7 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       C = creerChantierDemonstration();
     }
 
+    assurerMachines(C);
     synchroniserDatesChantier(C);
     await BaseLocale.sauverChantier(C);
     try { localStorage.setItem(CLE_COURANT, C.id); } catch (_) {}

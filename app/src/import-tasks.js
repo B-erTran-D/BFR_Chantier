@@ -61,6 +61,8 @@
     const phasesMap = new Map();
     const phases = [];
     const taches = [];
+    const machinesMap = new Map();
+    const machines = [];
 
     function obtenirPhase(nom) {
       const propre = String(nom || 'Général').trim() || 'Général';
@@ -72,7 +74,18 @@
       return p;
     }
 
+    function obtenirMachine(nom) {
+      const propre = String(nom || 'Machine 1').trim() || 'Machine 1';
+      const cle = norm(propre) || 'MACHINE1';
+      if (machinesMap.has(cle)) return machinesMap.get(cle);
+      const m = { id: uid('mc'), nom: propre, ref: '' };
+      machinesMap.set(cle, m);
+      machines.push(m);
+      return m;
+    }
+
     let phaseCourante = null;
+    let machineCourante = null;
 
     lignes.forEach(function (brut) {
       let l = brut.trim();
@@ -83,6 +96,14 @@
       const estMotPhase = /^(?:phase|lot|zone|etape|étape)\s*\d*\s*[:\-–]\s*(.+)$/i.exec(l);
       const aPuce = /^(?:[-*•◦▪▸►→]|\[[ xX✓✔!~\-]\]|\d+[.)]\s)/.test(l);
 
+      // Titre de machine : "MACHINE: ...", "MACHINE 2 - ...", "## Machine 2"
+      const mMachine = /^(?:#{1,4}\s*)?machine\s*(\d+)?\s*[:\-\u2013]?\s*(.*)$/i.exec(l);
+      if (mMachine && !aPuce && l.length < 90) {
+        const suffixe = (mMachine[2] || '').replace(/:$/, '').trim();
+        const nomMc = suffixe || ('Machine ' + (mMachine[1] || (machines.length + 1)));
+        machineCourante = obtenirMachine(nomMc);
+        return;
+      }
       if (estMarkdownTitre) {
         phaseCourante = obtenirPhase(estMarkdownTitre[1].replace(/:$/, '').trim());
         return;
@@ -142,6 +163,7 @@
       const ph = phaseCourante || obtenirPhase('Tâches du chantier');
       taches.push({
         id: uid('tc'),
+        machineId: machineCourante ? machineCourante.id : '',
         phaseId: ph.id,
         titre: l,
         domaine: domaine,
@@ -159,7 +181,7 @@
       });
     });
 
-    return { phases: phases, taches: taches };
+    return { phases: phases, taches: taches, machines: machines };
   }
 
   /* ===================== 2. Analyse CSV ================================= */
@@ -207,7 +229,8 @@
     if (!Array.isArray(lignes) || !lignes.length) return { phases: [], taches: [] };
 
     const COLONNES = {
-      phase: ['PHASE', 'PHASES', 'LOT', 'LOTS', 'ZONE', 'ZONES', 'CATEGORIE', 'SECTION', 'ETAPE', 'MACHINE'],
+      machine: ['MACHINE', 'MACHINES', 'EQUIPEMENT', 'LIGNE', 'UNITE'],
+      phase: ['PHASE', 'PHASES', 'LOT', 'LOTS', 'ZONE', 'ZONES', 'CATEGORIE', 'SECTION', 'ETAPE'],
       titre: ['TACHE', 'TACHES', 'INTITULE', 'DESIGNATION', 'DESCRIPTION', 'LIBELLE', 'ACTION', 'TRAVAUX', 'POINT', 'ELEMENT'],
       domaine: ['DOMAINE', 'METIER', 'SPECIALITE', 'TYPE'],
       poids: ['POIDS', 'COEFF', 'COEFFICIENT', 'IMPORTANCE', 'CHARGE'],
@@ -216,7 +239,7 @@
       blocage: ['BLOCAGE', 'RESERVE', 'RESERVES', 'POINTBLOQUANT', 'ALERTE']
     };
 
-    let mapCol = { phase: 0, titre: 1, domaine: 2, poids: -1, statut: 3, commentaire: 4, blocage: 5 };
+    let mapCol = { machine: -1, phase: 0, titre: 1, domaine: 2, poids: -1, statut: 3, commentaire: 4, blocage: 5 };
     let idxEntete = -1;
 
     for (let k = 0; k < Math.min(lignes.length, 8); k++) {
@@ -240,7 +263,20 @@
     const phasesMap = new Map();
     const phases = [];
     const taches = [];
+    const machinesMap = new Map();
+    const machines = [];
     let dernierePhaseNom = 'Tâches du chantier';
+    let derniereMachineNom = '';
+
+    function obtenirMachine(nom) {
+      const propre = String(nom || 'Machine 1').trim() || 'Machine 1';
+      const cle = norm(propre) || 'MACHINE1';
+      if (machinesMap.has(cle)) return machinesMap.get(cle);
+      const m = { id: uid('mc'), nom: propre, ref: '' };
+      machinesMap.set(cle, m);
+      machines.push(m);
+      return m;
+    }
 
     function obtenirPhase(nom) {
       const propre = String(nom || 'Tâches du chantier').trim() || 'Tâches du chantier';
@@ -261,6 +297,8 @@
 
       let nomPhase = lireCol(row, mapCol.phase);
       let titre = lireCol(row, mapCol.titre);
+      let nomMachine = lireCol(row, mapCol.machine);
+      if (nomMachine) derniereMachineNom = nomMachine;
 
       // Si une ligne n'a que la 1re colonne remplie alors que d'autres lignes ont 2+ colonnes, c'est un sous-titre de phase
       if (!titre && nomPhase && nonVides.length === 1) {
@@ -283,8 +321,10 @@
       const bloc = lireCol(row, mapCol.blocage);
       const stFinal = bloc && statut === 'afaire' ? 'bloque' : statut;
 
+      const mc = derniereMachineNom ? obtenirMachine(derniereMachineNom) : null;
       taches.push({
         id: uid('tc'),
+        machineId: mc ? mc.id : '',
         phaseId: ph.id,
         titre: titre,
         domaine: dom,
@@ -302,7 +342,7 @@
       });
     });
 
-    return { phases: phases, taches: taches };
+    return { phases: phases, taches: taches, machines: machines };
   }
 
   /* ===================== 3. Lecteur .xlsx sans dépendance =============== */
@@ -509,8 +549,8 @@
       try {
         const lignes = await lireXlsx(b);
         const res = depuisLignesTableur(lignes);
-        if (!res.taches.length) return { erreur: 'Aucune tâche trouvée dans le classeur Excel (colonnes conseillées : Phase, Tâche, Domaine, Statut, Commentaire).' };
-        return { type: 'taches', phases: res.phases, taches: res.taches };
+        if (!res.taches.length) return { erreur: 'Aucune tâche trouvée dans le classeur Excel (colonnes conseillées : Machine, Phase, Tâche, Domaine, Statut, Commentaire).' };
+        return { type: 'taches', phases: res.phases, taches: res.taches, machines: res.machines || [] };
       } catch (e) {
         return { erreur: 'Impossible de lire le classeur Excel : ' + ((e && e.message) || e) };
       }
@@ -539,7 +579,7 @@
           return { type: 'chantier', chantier: data.chantier, reglages: data.reglages || null };
         }
         if (data && Array.isArray(data.taches)) {
-          return { type: 'taches', phases: Array.isArray(data.phases) ? data.phases : [], taches: data.taches };
+          return { type: 'taches', phases: Array.isArray(data.phases) ? data.phases : [], taches: data.taches, machines: Array.isArray(data.machines) ? data.machines : [] };
         }
         if (Array.isArray(data)) {
           const res = analyserTexte(data.map(x => typeof x === 'string' ? x : (x.titre || x.nom || '')).join('\n'));
@@ -552,28 +592,27 @@
     const prem = texte.split(/\r?\n/)[0] || '';
     if (prem.indexOf(';') >= 0 || prem.indexOf('\t') >= 0 || (prem.indexOf(',') >= 0 && /phase|lot|tache|tâche|statut|designation|désignation/i.test(prem))) {
       const res = depuisLignesTableur(decouperCSV(texte));
-      if (res.taches.length) return { type: 'taches', phases: res.phases, taches: res.taches };
+      if (res.taches.length) return { type: 'taches', phases: res.phases, taches: res.taches, machines: res.machines || [] };
     }
 
     // Sinon : liste texte simple
     const resTxt = analyserTexte(texte);
     if (!resTxt.taches.length) return { erreur: 'Aucune tâche reconnue dans ce fichier.' };
-    return { type: 'taches', phases: resTxt.phases, taches: resTxt.taches };
+    return { type: 'taches', phases: resTxt.phases, taches: resTxt.taches, machines: resTxt.machines || [] };
   }
 
   /* ===================== 5. Modèle CSV téléchargeable =================== */
   function modeleCSV() {
     const lignes = [
-      'Phase;Tâche;Domaine;Poids;Statut;Commentaire',
-      '1. Réception & Implantation;Contrôle de la zone d\'implantation et traçage au sol;Mécanique;1;À faire;',
-      '1. Réception & Implantation;Déchargement et manutention des sous-ensembles en zone;Mécanique;2;À faire;',
-      '2. Montage mécanique;Assemblage, alignement et mise à niveau des châssis;Mécanique;3;À faire;',
-      '2. Montage mécanique;Fixation au sol (chevillage chimique) et montage carters;Mécanique;2;À faire;',
-      '3. Câblage électrique & pneumatique;Raccordement puissance 400V et inter-châssis;Électrique;3;À faire;',
-      '3. Câblage électrique & pneumatique;Raccordement réseau pneumatique et mise sous pression;Mécanique;1;À faire;',
-      '4. Automatisme & Sécurités;Test de la chaîne des arrêts d\'urgence et barrières immatérielles;Automatisme;2;À faire;',
-      '4. Automatisme & Sécurités;Tests E/S capteurs et sens de rotation moteurs;Automatisme;2;À faire;',
-      '5. Essais & Mise en route;Essais à vide puis montée en cadence avec produits client;Automatisme;3;À faire;'
+      'Machine;Phase;Tâche;Domaine;Poids;Statut;Commentaire',
+      'Machine 1;1. Réception & Implantation;Contrôle de la zone d\'implantation et traçage au sol;Mécanique;1;À faire;',
+      'Machine 1;1. Réception & Implantation;Déchargement et manutention des sous-ensembles en zone;Mécanique;2;À faire;',
+      'Machine 1;2. Montage mécanique;Assemblage, alignement et mise à niveau des châssis;Mécanique;3;À faire;',
+      'Machine 1;2. Montage mécanique;Fixation au sol (chevillage chimique) et montage carters;Mécanique;2;À faire;',
+      'Machine 2;2. Montage mécanique;Assemblage, alignement et mise à niveau des châssis;Mécanique;3;À faire;',
+      'Machine 2;3. Câblage électrique & pneumatique;Raccordement puissance 400V et inter-châssis;Électrique;3;À faire;',
+      'Machine 2;4. Automatisme & Sécurités;Test de la chaîne des arrêts d\'urgence et barrières immatérielles;Automatisme;2;À faire;',
+      'Machine 2;5. Essais & Mise en route;Essais à vide puis montée en cadence avec produits client;Automatisme;3;À faire;'
     ];
     return new Blob(['\uFEFF' + lignes.join('\r\n')], { type: 'text/csv;charset=utf-8' });
   }
