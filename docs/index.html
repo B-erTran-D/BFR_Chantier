@@ -6456,8 +6456,9 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
     const c = chantier || {};
     const s = reglages || {};
     const t = s.technicien || {};
-    const brut = valeur(c.technicienRole) || valeur(t.fonction);
+    const brut = valeur(t.fonction) || valeur(c.technicienRole);
     if (!brut) return '';
+    // Priorité au rôle choisi dans « Mes informations » (réglages perso), repli sur le rôle du chantier.
     // Normalisation : on ne conserve que les 3 rôles officiels (anciens libellés ignorés)
     const trouve = ROLES_TECHNICIEN.find(r => r.toLowerCase() === brut.toLowerCase());
     return trouve || '';
@@ -6986,6 +6987,20 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       return false;
     }
 
+    /* Saut de page forcé (sauf si on est déjà en haut de page) :
+       la page 1 est réservée à la Synthèse & Avancement, la suite commence page 2. */
+    sautPageForce() {
+      const p = this.pdf;
+      const nbPages = (p.pages && p.pages.length) || 1;
+      if (nbPages === 1 && p.y > this.M + 100) {
+        p.newPage();
+        this.enteteSuite();
+        p.y += 6;
+        return true;
+      }
+      return false;
+    }
+
     /* En-tête de la page 1 : calqué sur la charte officielle BFR Systems */
     entetePrincipale() {
       const p = this.pdf, c = this.c, s = this.s, b = this.bilan, C = this.C;
@@ -6997,7 +7012,7 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
         // Badge discret en haut à droite : N° d'affaire + Jour N
         const refDroite = [valeur(c.affaire) ? 'Affaire ' + valeur(c.affaire) : '', 'Jour ' + b.numeroJour].filter(Boolean).join('  ·  ');
         p.text(refDroite, this.W - this.M, p.y + h * 0.62, { size: 10, font: 'F2', color: C.navy, align: 'right' });
-        p.y += h + 16;
+        p.y += h + 18;
       }
 
       // Bloc Client (gauche) + Logo Client éventuel (droite)
@@ -7025,23 +7040,23 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
         p.image(logoCli.bytes, this.W - this.M - largLogo, haut, largLogo, h);
         y = Math.max(y, haut + h);
       }
-      p.y = y + 16;
+      p.y = y + 18;
 
       // Grand titre Cyan officiel BFR Systems
       const titreDoc = 'Rapport quotidien de chantier';
       let taille = 24;
       while (taille > 16 && Pdf.measure(titreDoc, taille, true) > this.CW * 0.92) taille -= 1;
       p.text(titreDoc, this.W / 2, p.y + taille, { size: taille, font: 'F2', color: CYAN, align: 'center', bold: true });
-      p.y += taille + 6;
+      p.y += taille + 8;
 
       const sousTitreDate = 'Jour ' + b.numeroJour + (b.nbJoursTotal > 1 ? ' / ' + b.nbJoursTotal : '') + ' — ' + frDate(b.dateJour);
       p.text(sousTitreDate, this.W / 2, p.y + 14, { size: 14.5, font: 'F2', color: CYAN, align: 'center', bold: true });
-      p.y += 22;
+      p.y += 24;
 
       if (valeur(c.nom)) {
         const intitule = valeur(c.nom) + (valeur(c.affaire) ? '  (' + valeur(c.affaire) + ')' : '');
         p.text(Pdf.trunc(intitule, this.CW * 0.94, 11.5, true), this.W / 2, p.y + 11, { size: 11.5, font: 'F2', color: C.navy, align: 'center', bold: true });
-        p.y += 20;
+        p.y += 22;
       }
 
       // Bandeau compact « Technicien BFR Systems » : nom + prénom + rôle uniquement
@@ -7050,18 +7065,18 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       const roleTech = roleTechnicien(c, s);
       const respCoord = [roleTech, valeur(t.tel) ? 'Tél. ' + valeur(t.tel) : '', valeur(t.email)].filter(Boolean).join('  ·  ');
       const equipeTxt = valeur(b.jour.equipeJour) || valeur(c.equipe);
-      const hContact = equipeTxt ? 44 : 32;
+      const hContact = equipeTxt ? 48 : 38;
       p.rect(this.M, p.y, this.CW, hContact, { fill: C.bandeau, stroke: C.bord, lineWidth: 0.6 });
       p.rect(this.M, p.y, 3.5, hContact, { fill: CYAN });
       p.text('TECHNICIEN BFR SYSTEMS :', this.M + 10, p.y + 11, { size: 7.6, font: 'F2', color: C.gris, bold: true });
       p.text(Pdf.trunc(respNom + (respCoord ? '  —  ' + respCoord : ''), this.CW - 18, 9.6, true), this.M + 10, p.y + 23.5, { size: 9.6, font: 'F2', color: C.texte, bold: true });
       if (equipeTxt) {
         p.text(Pdf.trunc('Équipe présente sur site : ' + equipeTxt + (valeur(b.jour.horaires) ? '  |  Horaires : ' + valeur(b.jour.horaires) : ''), this.CW - 18, 8.8),
-          this.M + 10, p.y + 36.5, { size: 8.8, color: C.gris });
+          this.M + 10, p.y + 40, { size: 8.8, color: C.gris });
       } else if (valeur(b.jour.horaires)) {
         p.text('Horaires : ' + valeur(b.jour.horaires), this.W - this.M - 10, p.y + 11, { size: 8.4, color: C.gris, align: 'right' });
       }
-      p.y += hContact + 14;
+      p.y += hContact + 18;
     }
 
     /* En-tête des pages suivantes */
@@ -7078,29 +7093,29 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
         const h = w * (this.logo.h / this.logo.w);
         p.image(this.logo.bytes, this.M, p.y, w, h);
         p.text(Pdf.trunc(rappel, this.CW * 0.66, 9.0), this.W - this.M, p.y + h - 3, { size: 9.0, color: C.gris, align: 'right' });
-        p.y += h + 7;
+        p.y += h + 10;
       } else {
         p.text(valeur(this.s.societe && this.s.societe.nom) || 'BFR SYSTEMS', this.M, p.y + 10, { size: 10.5, font: 'F2', color: CYAN, bold: true });
         p.text(Pdf.trunc(rappel, this.CW * 0.66, 9.0), this.W - this.M, p.y + 10, { size: 9.0, color: C.gris, align: 'right' });
-        p.y += 15;
+        p.y += 18;
       }
       p.line(this.M, p.y, this.W - this.M, p.y, { color: C.bord, width: 0.7 });
-      p.y += 14;
+      p.y += 18;
     }
 
     /* Bandeau de section officiel BFR Cyan */
     titreSection(txt, sousTitre, reserver) {
-      this.saut(36 + (reserver || 0));
+      this.saut(44 + (reserver || 0));
       const p = this.pdf, y = p.y, C = this.C;
       let taille = 11.2;
       const maxW = this.CW - 16 - (sousTitre ? Pdf.measure(sousTitre, 8.8, false) + 14 : 0);
       while (taille > 8.0 && Pdf.measure(txt.toUpperCase(), taille, true) > maxW) taille -= 0.5;
-      p.rect(this.M, y, this.CW, 20, { fill: CYAN });
-      p.text(txt.toUpperCase(), this.M + 8, y + 13.8, { size: taille, font: 'F2', color: C.blanc, bold: true });
+      p.rect(this.M, y, this.CW, 22, { fill: CYAN });
+      p.text(txt.toUpperCase(), this.M + 8, y + 15.2, { size: taille, font: 'F2', color: C.blanc, bold: true });
       if (sousTitre) {
-        p.text(sousTitre, this.W - this.M - 8, y + 13.6, { size: 8.8, color: C.blanc, align: 'right' });
+        p.text(sousTitre, this.W - this.M - 8, y + 15, { size: 8.8, color: C.blanc, align: 'right' });
       }
-      p.y = y + 26;
+      p.y = y + 30;
     }
 
     kv(pairs) {
@@ -7118,27 +7133,27 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
         const largeurs = ligne.length === 2 ? [colW, colW] : [ligne[0][2] ? this.CW : colW];
         let h = 0;
         ligne.forEach((it, idx) => {
-          h = Math.max(h, 14 + Pdf.wrap(valeur(it[1]), largeurs[idx] - 14, 9.4).length * 12.2);
+          h = Math.max(h, 16 + Pdf.wrap(valeur(it[1]), largeurs[idx] - 14, 9.4).length * 13);
         });
         this.saut(h + 2);
         const y = p.y;
         let x = this.M;
         for (let idx = 0; idx < ligne.length; idx++) {
           p.rect(x, y, largeurs[idx], h, { fill: C.bandeau, stroke: C.bord, lineWidth: 0.5 });
-          p.text(ligne[idx][0], x + 7, y + 10.8, { size: 7.5, font: 'F2', color: C.gris, bold: true });
-          p.paragraph(valeur(ligne[idx][1]), x + 7, y + 12.2, largeurs[idx] - 14, { size: 9.4, lineHeight: 12.2, color: C.texte });
+          p.text(ligne[idx][0], x + 7, y + 11.8, { size: 7.5, font: 'F2', color: C.gris, bold: true });
+          p.paragraph(valeur(ligne[idx][1]), x + 7, y + 13.5, largeurs[idx] - 14, { size: 9.4, lineHeight: 13, color: C.texte });
           x += largeurs[idx] + gap;
         }
-        p.y = y + h + 2;
+        p.y = y + h + 3;
       }
-      p.y += 5;
+      p.y += 8;
     }
 
     blocTexte(etiquette, contenu, couleurBordGauche, couleurFond) {
       const texte = valeur(contenu);
       if (!texte) return;
       const p = this.pdf, C = this.C;
-      const lh = 13.0;
+      const lh = 14.2;
       const lignes = Pdf.wrap(texte, this.CW - 18, 9.5);
       let idx = 0;
       while (idx < lignes.length) {
@@ -7147,15 +7162,15 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
         const n = Math.min(place, lignes.length - idx);
         if (idx === 0 && etiquette) {
           p.text(etiquette, this.M + 2, p.y + 9.5, { size: 8.8, font: 'F2', color: couleurBordGauche || C.navy, bold: true });
-          p.y += 13;
+          p.y += 15;
         }
-        const hCadre = n * lh + 9;
+        const hCadre = n * lh + 12;
         p.rect(this.M, p.y, this.CW, hCadre, { fill: couleurFond || [1, 1, 1], stroke: C.bord, lineWidth: 0.6 });
         if (couleurBordGauche) p.rect(this.M, p.y, 3.5, hCadre, { fill: couleurBordGauche });
         for (let j = 0; j < n; j++) {
-          p.text(lignes[idx + j], this.M + 9, p.y + 10.5 + j * lh, { size: 9.5, color: C.texte });
+          p.text(lignes[idx + j], this.M + 9, p.y + 11.5 + j * lh, { size: 9.5, color: C.texte });
         }
-        p.y += hCadre + 6;
+        p.y += hCadre + 9;
         idx += n;
       }
     }
@@ -7165,17 +7180,17 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       const p = this.pdf, C = this.C, b = this.bilan;
       const cad = b.cadence;
       const afficherCadence = b.nbJoursTotal >= 2;
-      const hJauge = afficherCadence ? 52 : 38;
+      const hJauge = afficherCadence ? 58 : 44;
 
       // 1. Jauge principale d'avancement global + Cadence planning
-      this.saut(hJauge + 50);
+      this.saut(hJauge + 62);
       const yJauge = p.y;
       p.rect(this.M, yJauge, this.CW, hJauge, { fill: C.cyanClair, stroke: CYAN, lineWidth: 0.7 });
       p.text('AVANCEMENT GLOBAL' + (b.estPondere ? ' (PONDERE)' : ''), this.M + 10, yJauge + 13, { size: 8.5, font: 'F2', color: C.navy, bold: true });
       const txtDroit = b.faitTotal.length + ' / ' + b.total + ' tâche' + (b.total > 1 ? 's' : '') + ' terminée' + (b.faitTotal.length > 1 ? 's' : '') + '  —  ' + b.pctGlobal + ' %';
       p.text(txtDroit, this.W - this.M - 12, yJauge + 13, { size: 9.4, font: 'F2', color: C.navy, align: 'right', bold: true });
 
-      const barX = this.M + 10, barY = yJauge + 20, barW = this.CW - 20, barH = 10;
+      const barX = this.M + 10, barY = yJauge + 23, barW = this.CW - 20, barH = 11;
       p.rect(barX, barY, barW, barH, { fill: [1, 1, 1], stroke: C.bord, lineWidth: 0.5 });
       if (b.pctGlobal > 0) {
         const wFill = Math.max(4, (barW * Math.min(100, b.pctGlobal)) / 100);
@@ -7189,15 +7204,15 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
 
       if (afficherCadence) {
         const txtDelai = 'Délai écoulé : Jour ' + b.numeroJour + ' / ' + b.nbJoursTotal + ' (' + cad.pctDelai + ' % du planning)';
-        p.text(txtDelai, this.M + 10, yJauge + 44, { size: 8.2, color: C.gris });
+        p.text(txtDelai, this.M + 10, yJauge + 51, { size: 8.2, color: C.gris });
         let txtCad = cad.libelle.toUpperCase();
         if (b.bloquesClient.length > 0) {
           txtCad += '  ·  ' + b.bloquesClient.length + ' ATTENTE' + (b.bloquesClient.length > 1 ? 'S' : '') + ' CLIENT';
         }
-        p.text(txtCad, this.W - this.M - 12, yJauge + 44, { size: 8.2, font: 'F2', color: hexRgb(cad.couleur), align: 'right', bold: true });
+        p.text(txtCad, this.W - this.M - 12, yJauge + 51, { size: 8.2, font: 'F2', color: hexRgb(cad.couleur), align: 'right', bold: true });
       }
 
-      p.y = yJauge + hJauge + 7;
+      p.y = yJauge + hJauge + 10;
 
       // 2. 4 Cartes Compteurs KPI (Fait ce jour / Total terminé / En cours / Bloqués)
       const libBloq = b.bloquesClient.length
@@ -7214,16 +7229,16 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       const yKpi = p.y;
       kpis.forEach((k, idx) => {
         const x = this.M + idx * (caseW + gap);
-        p.rect(x, yKpi, caseW, 34, { fill: hexClair(k.coul, 0.90), stroke: hexRgb(k.coul), lineWidth: 0.6 });
-        p.text(k.n, x + caseW / 2, yKpi + 16.5, { size: 14.5, font: 'F2', color: hexRgb(k.coul), align: 'center', bold: true });
-        p.text(Pdf.trunc(k.lib, caseW - 6, 7.5), x + caseW / 2, yKpi + 28, { size: 7.5, color: C.gris, align: 'center' });
+        p.rect(x, yKpi, caseW, 38, { fill: hexClair(k.coul, 0.90), stroke: hexRgb(k.coul), lineWidth: 0.6 });
+        p.text(k.n, x + caseW / 2, yKpi + 18.5, { size: 14.5, font: 'F2', color: hexRgb(k.coul), align: 'center', bold: true });
+        p.text(Pdf.trunc(k.lib, caseW - 6, 7.5), x + caseW / 2, yKpi + 32, { size: 7.5, color: C.gris, align: 'center' });
       });
-      p.y = yKpi + 42;
+      p.y = yKpi + 48;
 
       // 2b. Avancement par machine (si plusieurs machines sur l'intervention)
       const machinesActives = (b.parMachine || []).filter(m => m.total > 0);
       if (machinesActives.length > 1) {
-        const hEntM = 18, hRowM = 20;
+        const hEntM = 20, hRowM = 23;
         this.saut(hEntM + hRowM * Math.min(2, machinesActives.length) + 8);
         const colNomM = Math.round(this.CW * 0.48);
         const colBarreM = Math.round(this.CW * 0.28);
@@ -7231,9 +7246,9 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
         const dessinerEnteteMachines = () => {
           const y = p.y;
           p.rect(this.M, y, this.CW, hEntM, { fill: C.cyanClair, stroke: C.bordFort, lineWidth: 0.5 });
-          p.text('Machine de l\'intervention', this.M + 7, y + 12.2, { size: 8.5, font: 'F2', color: C.navy, bold: true });
-          p.text('Progression', this.M + colNomM + 7, y + 12.2, { size: 8.5, font: 'F2', color: C.navy, bold: true });
-          p.text('État', this.M + colNomM + colBarreM + colStatM - 7, y + 12.2, { size: 8.5, font: 'F2', color: C.navy, align: 'right', bold: true });
+          p.text('Machine de l\'intervention', this.M + 7, y + 14.8, { size: 8.5, font: 'F2', color: C.navy, bold: true });
+          p.text('Progression', this.M + colNomM + 7, y + 14.8, { size: 8.5, font: 'F2', color: C.navy, bold: true });
+          p.text('État', this.M + colNomM + colBarreM + colStatM - 7, y + 14.8, { size: 8.5, font: 'F2', color: C.navy, align: 'right', bold: true });
           p.y = y + hEntM;
         };
         dessinerEnteteMachines();
@@ -7245,27 +7260,27 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
           }
           const y = p.y;
           p.rect(this.M, y, this.CW, hRowM, { fill: [1, 1, 1], stroke: C.bord, lineWidth: 0.4 });
-          p.text(Pdf.trunc(m.nom, colNomM - 14, 9.0, true), this.M + 7, y + 13.2, { size: 9.0, font: 'F2', color: C.texte, bold: true });
-          const bx = this.M + colNomM + 7, by = y + 6.5, bw = colBarreM - 46, bh = 7;
+          p.text(Pdf.trunc(m.nom, colNomM - 14, 9.0, true), this.M + 7, y + 15.5, { size: 9.0, font: 'F2', color: C.texte, bold: true });
+          const bx = this.M + colNomM + 7, by = y + 7.5, bw = colBarreM - 46, bh = 8;
           p.rect(bx, by, bw, bh, { fill: [0.92, 0.94, 0.96], stroke: C.bord, lineWidth: 0.3 });
           if (m.pct > 0) {
             p.rect(bx, by, Math.max(2, (bw * m.pct) / 100), bh, { fill: m.pct >= 100 ? hexRgb('#15803d') : CYAN });
           }
-          p.text(m.pct + ' %', bx + bw + 6, y + 13, { size: 8.4, font: 'F2', color: m.pct >= 100 ? hexRgb('#15803d') : C.navy, bold: true });
+          p.text(m.pct + ' %', bx + bw + 6, y + 15.5, { size: 8.4, font: 'F2', color: m.pct >= 100 ? hexRgb('#15803d') : C.navy, bold: true });
           let resumeM = m.fait + '/' + m.total + ' fait';
           if (m.bloque) resumeM += ' · ' + m.bloque + ' bloq.';
           else if (m.faitCeJour) resumeM += ' (+' + m.faitCeJour + ' auj.)';
-          p.text(Pdf.trunc(resumeM, colStatM - 10, 8.3), this.W - this.M - 7, y + 13,
+          p.text(Pdf.trunc(resumeM, colStatM - 10, 8.3), this.W - this.M - 7, y + 15.5,
             { size: 8.3, color: m.bloque ? hexRgb('#b91c1c') : C.gris, align: 'right' });
           p.y = y + hRowM;
         });
-        p.y += 8;
+        p.y += 10;
       }
 
       // 3. Tableau d'avancement par Phase / Lot (s'il y a au moins 1 tâche)
       const phasesActives = b.parPhase.filter(ph => ph.total > 0);
       if (phasesActives.length > 0) {
-        const hEnt = 18, hRow = 20;
+        const hEnt = 20, hRow = 23;
         this.saut(hEnt + hRow * Math.min(2, phasesActives.length) + 8);
         const colNom = Math.round(this.CW * 0.48);
         const colBarre = Math.round(this.CW * 0.28);
@@ -7274,9 +7289,9 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
         const dessinerEntetePhases = () => {
           const y = p.y;
           p.rect(this.M, y, this.CW, hEnt, { fill: C.cyanClair, stroke: C.bordFort, lineWidth: 0.5 });
-          p.text('Phase / Lot du chantier', this.M + 7, y + 12.2, { size: 8.5, font: 'F2', color: C.navy, bold: true });
-          p.text('Progression', this.M + colNom + 7, y + 12.2, { size: 8.5, font: 'F2', color: C.navy, bold: true });
-          p.text('État', this.M + colNom + colBarre + colStat - 7, y + 12.2, { size: 8.5, font: 'F2', color: C.navy, align: 'right', bold: true });
+          p.text('Phase / Lot du chantier', this.M + 7, y + 14.8, { size: 8.5, font: 'F2', color: C.navy, bold: true });
+          p.text('Progression', this.M + colNom + 7, y + 14.8, { size: 8.5, font: 'F2', color: C.navy, bold: true });
+          p.text('État', this.M + colNom + colBarre + colStat - 7, y + 14.8, { size: 8.5, font: 'F2', color: C.navy, align: 'right', bold: true });
           p.y = y + hEnt;
         };
 
@@ -7289,24 +7304,24 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
           }
           const y = p.y;
           p.rect(this.M, y, this.CW, hRow, { fill: [1, 1, 1], stroke: C.bord, lineWidth: 0.4 });
-          p.text(Pdf.trunc(ph.nom, colNom - 14, 9.0, true), this.M + 7, y + 13.2, { size: 9.0, font: 'F2', color: C.texte, bold: true });
+          p.text(Pdf.trunc(ph.nom, colNom - 14, 9.0, true), this.M + 7, y + 15.5, { size: 9.0, font: 'F2', color: C.texte, bold: true });
 
           // Mini-barre de progression vectorielle
-          const bx = this.M + colNom + 7, by = y + 6.5, bw = colBarre - 46, bh = 7;
+          const bx = this.M + colNom + 7, by = y + 7.5, bw = colBarre - 46, bh = 8;
           p.rect(bx, by, bw, bh, { fill: [0.92, 0.94, 0.96], stroke: C.bord, lineWidth: 0.3 });
           if (ph.pct > 0) {
             p.rect(bx, by, Math.max(2, (bw * ph.pct) / 100), bh, { fill: ph.pct >= 100 ? hexRgb('#15803d') : CYAN });
           }
-          p.text(ph.pct + ' %', bx + bw + 6, y + 13, { size: 8.4, font: 'F2', color: ph.pct >= 100 ? hexRgb('#15803d') : C.navy, bold: true });
+          p.text(ph.pct + ' %', bx + bw + 6, y + 15.5, { size: 8.4, font: 'F2', color: ph.pct >= 100 ? hexRgb('#15803d') : C.navy, bold: true });
 
           let resumePh = ph.fait + '/' + ph.total + ' fait';
           if (ph.bloque) resumePh += ' · ' + ph.bloque + ' bloq.';
           else if (ph.faitCeJour) resumePh += ' (+' + ph.faitCeJour + ' auj.)';
-          p.text(Pdf.trunc(resumePh, colStat - 10, 8.3), this.W - this.M - 7, y + 13,
+          p.text(Pdf.trunc(resumePh, colStat - 10, 8.3), this.W - this.M - 7, y + 15.5,
             { size: 8.3, color: ph.bloque ? hexRgb('#b91c1c') : C.gris, align: 'right' });
           p.y = y + hRow;
         });
-        p.y += 8;
+        p.y += 10;
       }
     }
 
@@ -7465,7 +7480,7 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       const titreAffiche = valeur(t.titre) + (wPoids > 1 ? '  (x' + wPoids + ')' : '');
       const lignesTitre = Pdf.wrap(titreAffiche, this.CW - 20, 9.8, true);
       const lignesNote = note ? Pdf.wrap(note, this.CW - 22, 9.0) : [];
-      const hCarte = 19 + lignesTitre.length * 13 + (lignesNote.length ? lignesNote.length * 12 + 6 : 4) + 5;
+      const hCarte = 22 + lignesTitre.length * 14 + (lignesNote.length ? lignesNote.length * 13 + 8 : 6) + 7;
 
       this.saut(Math.min(hCarte, 140));
       const y0 = p.y;
@@ -7486,19 +7501,19 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       }
       p.text(badgeDroite, this.W - this.M - 8, y0 + 11.2, { size: 7.9, font: 'F2', color: coul, align: 'right', bold: true });
 
-      let yc = y0 + 28;
+      let yc = y0 + 32;
       lignesTitre.forEach(l => {
         p.text(l, this.M + 9, yc, { size: 9.8, font: 'F2', color: C.texte, bold: true });
-        yc += 13;
+        yc += 14;
       });
       if (lignesNote.length) {
         yc += 2;
         lignesNote.forEach(l => {
           p.text(l, this.M + 11, yc, { size: 9.0, color: mode === 'bloque' ? coul : C.gris });
-          yc += 12;
+          yc += 13;
         });
       }
-      p.y = y0 + hCarte + 5;
+      p.y = y0 + hCarte + 9;
 
       const phs = (t.photos || []).filter(ph => ph && ph.dataUrl && ph.visibilite !== 'interne');
       if (phs.length) {
@@ -7546,7 +7561,7 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
           yc += 11.5;
         });
       }
-      p.y = y0 + hCarte + 5;
+      p.y = y0 + hCarte + 9;
     }
 
     /* Tableau synthétique complet de toutes les tâches du chantier (groupé par machine puis par phase) */
@@ -7689,6 +7704,9 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       if (valeur(b.jour.synthese)) {
         this.blocTexte('Compte rendu de la journée', b.jour.synthese, CYAN, [0.975, 0.99, 1]);
       }
+
+      // Page 1 réservée à la Synthèse & Avancement : tout le reste commence page 2
+      this.sautPageForce();
 
       // 3. Section 2 : Points bloquants, attentes client & levées de blocage du jour
       if (b.bloques.length > 0 || b.blocagesLevesCeJour.length > 0 || valeur(b.jour.aleas)) {
@@ -10529,7 +10547,7 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
           <div class="field"><label>Rôle du technicien</label>
             <select data-ck="technicienRole">
               <option value="">— Choisir le rôle —</option>
-              ${Report.ROLES_TECHNICIEN.map(r => `<option value="${esc(r)}"${(C.technicienRole || (S.technicien && S.technicien.fonction)) === r ? ' selected' : ''}>${esc(r)}</option>`).join('')}
+              ${Report.ROLES_TECHNICIEN.map(r => `<option value="${esc(r)}"${((S.technicien && S.technicien.fonction) || C.technicienRole) === r ? ' selected' : ''}>${esc(r)}</option>`).join('')}
             </select></div>
         </div>
         <div class="field"><label>Équipe / Collègues sur site</label>
@@ -10663,6 +10681,12 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
 
       if (C.nom || (C.client && C.client.nom) || datesModifiees) {
         C.estDemo = false;
+      }
+
+      // Le rôle choisi dans la fiche chantier met à jour « Mes informations » (source de vérité pour les rapports)
+      if (C.technicienRole && S.technicien && S.technicien.fonction !== C.technicienRole) {
+        S.technicien.fonction = C.technicienRole;
+        sauverReglages();
       }
 
       synchroniserDatesChantier(C, { depuisFormulaire: true, datesModifiees: datesModifiees });
@@ -11509,7 +11533,7 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
         };
         sauverReglages();
         if (!C.responsable || C.estDemo) C.responsable = Report.nomComplet(S.technicien);
-        if (!C.technicienRole || C.estDemo) C.technicienRole = S.technicien.fonction;
+        if (S.technicien.fonction) C.technicienRole = S.technicien.fonction;
         planifierSauvegarde();
         overlay.remove();
         rendreTout();

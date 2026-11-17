@@ -2417,7 +2417,7 @@
           <div class="field"><label>Rôle du technicien</label>
             <select data-ck="technicienRole">
               <option value="">— Choisir le rôle —</option>
-              ${Report.ROLES_TECHNICIEN.map(r => `<option value="${esc(r)}"${(C.technicienRole || (S.technicien && S.technicien.fonction)) === r ? ' selected' : ''}>${esc(r)}</option>`).join('')}
+              ${Report.ROLES_TECHNICIEN.map(r => `<option value="${esc(r)}"${((S.technicien && S.technicien.fonction) || C.technicienRole) === r ? ' selected' : ''}>${esc(r)}</option>`).join('')}
             </select></div>
         </div>
         <div class="field"><label>Équipe / Collègues sur site</label>
@@ -2551,6 +2551,12 @@
 
       if (C.nom || (C.client && C.client.nom) || datesModifiees) {
         C.estDemo = false;
+      }
+
+      // Le rôle choisi dans la fiche chantier met à jour « Mes informations » (source de vérité pour les rapports)
+      if (C.technicienRole && S.technicien && S.technicien.fonction !== C.technicienRole) {
+        S.technicien.fonction = C.technicienRole;
+        sauverReglages();
       }
 
       synchroniserDatesChantier(C, { depuisFormulaire: true, datesModifiees: datesModifiees });
@@ -3397,7 +3403,7 @@
         };
         sauverReglages();
         if (!C.responsable || C.estDemo) C.responsable = Report.nomComplet(S.technicien);
-        if (!C.technicienRole || C.estDemo) C.technicienRole = S.technicien.fonction;
+        if (S.technicien.fonction) C.technicienRole = S.technicien.fonction;
         planifierSauvegarde();
         overlay.remove();
         rendreTout();
