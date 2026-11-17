@@ -6864,7 +6864,10 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
     return frDate(photo && photo.datePrise) || '';
   }
 
-  /** Recadre une image au ratio cible (cover, centré sur centreCx/Cy) pour un rendu Avant/Après au même format. */
+  /** Recadre une image au ratio cible (cover, centré) pour un rendu Avant/Après au même format.
+      Le recadrage est TOUJOURS centré (comme object-fit: cover dans l'app, ratio 1.35) :
+      la zone de repère est exprimée dans cet espace recadré, donc sa position dans l'app
+      est exactement celle du PDF. Ne pas recentrer sur la zone, sinon elle se décale. */
   function toJpegRecadre(dataUrl, ratioCible, maxLargeur, qualite, centre) {
     return new Promise(function (resolve) {
       if (!dataUrl || !ratioCible || ratioCible <= 0) { toJpeg(dataUrl, maxLargeur, qualite).then(resolve); return; }
@@ -6877,12 +6880,10 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
           let sx = 0, sy = 0, sw = w0, sh = h0;
           if (ratioImg > ratioCible) {
             sw = Math.round(h0 * ratioCible);
-            const cx = centre && isFinite(centre.cx) ? centre.cx : 0.5;
-            sx = Math.round(Math.min(w0 - sw, Math.max(0, cx * w0 - sw / 2)));
+            sx = Math.round((w0 - sw) / 2);
           } else if (ratioImg < ratioCible) {
             sh = Math.round(w0 / ratioCible);
-            const cy = centre && isFinite(centre.cy) ? centre.cy : 0.5;
-            sy = Math.round(Math.min(h0 - sh, Math.max(0, cy * h0 - sh / 2)));
+            sy = Math.round((h0 - sh) / 2);
           }
           const ratioSortie = Math.min(1, (maxLargeur || 1000) / Math.max(sw, sh));
           const w = Math.max(1, Math.round(sw * ratioSortie));
@@ -6908,8 +6909,7 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
   /** Même recadrage + zone de repère dessinée en pointillés cyan (pour Word, où le vectoriel n'est pas possible). */
   function toJpegRecadreZone(dataUrl, ratioCible, zone, maxLargeur, qualite) {
     return new Promise(function (resolve) {
-      const centre = zone ? { cx: zone.x + zone.w / 2, cy: zone.y + zone.h / 2 } : null;
-      toJpegRecadre(dataUrl, ratioCible, maxLargeur, qualite, centre).then(function (j) {
+      toJpegRecadre(dataUrl, ratioCible, maxLargeur, qualite, null).then(function (j) {
         if (!j || !zone) { resolve(j); return; }
         try {
           const img = new Image();
@@ -7617,10 +7617,10 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       const ratioCible = (colW - 4) / (hImg - 4);
       const zones = zonesSeparées(paire);
       const zoneAv = zones.avant, zoneAp = zones.apres;
-      const centreAv = { cx: zoneAv.x + zoneAv.w / 2, cy: zoneAv.y + zoneAv.h / 2 };
-      const centreAp = { cx: zoneAp.x + zoneAp.w / 2, cy: zoneAp.y + zoneAp.h / 2 };
-      const jAv = await toJpegRecadre(paire.avant.dataUrl, ratioCible, 1000, 0.87, centreAv);
-      const jAp = await toJpegRecadre(paire.apres.dataUrl, ratioCible, 1000, 0.87, centreAp);
+      // Recadrage centré identique à l'app (ratio 1.35) : la zone dessinée dans l'app
+      // apparaît à la même position dans le PDF, sans transformation.
+      const jAv = await toJpegRecadre(paire.avant.dataUrl, ratioCible, 1000, 0.87, null);
+      const jAp = await toJpegRecadre(paire.apres.dataUrl, ratioCible, 1000, 0.87, null);
       if (!jAv && !jAp) return;
       const p = this.pdf, C = this.C;
       const legGlobale = [paire.legende, contexte].filter(Boolean)[0] || '';
