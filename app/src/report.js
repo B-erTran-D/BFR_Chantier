@@ -266,6 +266,18 @@
     return z || Object.assign({}, ZONE_DEFAUT);
   }
 
+  /* Zones indépendantes : chaque photo garde sa propre zone (images pas parfaitement alignées).
+     Repli sur la zone de l'autre photo pour les anciennes paires où une seule zone était renseignée. */
+  function zonesSeparées(paire) {
+    const zAv = zoneRepereNorm(paire && paire.avant && paire.avant.zoneRepere);
+    const zAp = zoneRepereNorm(paire && paire.apres && paire.apres.zoneRepere);
+    const defaut = Object.assign({}, ZONE_DEFAUT);
+    return {
+      avant: zAv || zAp || defaut,
+      apres: zAp || zAv || defaut
+    };
+  }
+
   function changmentPaire(paire) {
     return valeur(paire && paire.avant && paire.avant.changement)
       || valeur(paire && paire.apres && paire.apres.changement) || '';
@@ -1026,10 +1038,12 @@
       const colW = (this.CW - gap - 12) / 2;
       const hImg = 185;
       const ratioCible = (colW - 4) / (hImg - 4);
-      const zone = zoneReperePaire(paire);
-      const centreZone = { cx: zone.x + zone.w / 2, cy: zone.y + zone.h / 2 };
-      const jAv = await toJpegRecadre(paire.avant.dataUrl, ratioCible, 1000, 0.87, centreZone);
-      const jAp = await toJpegRecadre(paire.apres.dataUrl, ratioCible, 1000, 0.87, centreZone);
+      const zones = zonesSeparées(paire);
+      const zoneAv = zones.avant, zoneAp = zones.apres;
+      const centreAv = { cx: zoneAv.x + zoneAv.w / 2, cy: zoneAv.y + zoneAv.h / 2 };
+      const centreAp = { cx: zoneAp.x + zoneAp.w / 2, cy: zoneAp.y + zoneAp.h / 2 };
+      const jAv = await toJpegRecadre(paire.avant.dataUrl, ratioCible, 1000, 0.87, centreAv);
+      const jAp = await toJpegRecadre(paire.apres.dataUrl, ratioCible, 1000, 0.87, centreAp);
       if (!jAv && !jAp) return;
       const p = this.pdf, C = this.C;
       const legGlobale = [paire.legende, contexte].filter(Boolean)[0] || '';
@@ -1050,7 +1064,7 @@
       const txtDates = [dateAv ? 'AVANT ' + dateAv : '', dateAp ? 'APRES ' + dateAp : ''].filter(Boolean).join('  ·  ');
       if (txtDates) p.text(txtDates, this.W - this.M - 8, y0 + 13.5, { size: 7.6, color: C.blanc, align: 'right' });
 
-      const dessinerSlot = (j, idx, label, coulHex, dateTxt) => {
+      const dessinerSlot = (j, idx, label, coulHex, dateTxt, zone) => {
         const sx = this.M + 6 + idx * (colW + gap);
         const sy = y0 + hEnt + 4;
         p.rect(sx, sy, colW, hLab, { fill: hexClair(coulHex, 0.86), stroke: hexRgb(coulHex), lineWidth: 0.4 });
@@ -1061,7 +1075,7 @@
           const bytes = Pdf.dataUrlToBytes(j.dataUrl);
           // Même ratio des 2 côtés : l'image remplit exactement le cadre (cover)
           p.image(bytes, sx + 2, iy + 2, colW - 4, hImg - 4);
-          // Zone de repère commune (même position relative sur Avant et Après)
+          // Zone de repère propre à cette photo (déplaçable séparément si les images ne sont pas alignées)
           const zx = sx + 2 + zone.x * (colW - 4);
           const zy = iy + 2 + zone.y * (hImg - 4);
           const zw = zone.w * (colW - 4);
@@ -1077,8 +1091,8 @@
         }
       };
 
-      dessinerSlot(jAv, 0, 'AVANT', '#b45309', dateAv);
-      dessinerSlot(jAp, 1, 'APRES', '#15803d', dateAp);
+      dessinerSlot(jAv, 0, 'AVANT', '#b45309', dateAv, zoneAv);
+      dessinerSlot(jAp, 1, 'APRES', '#15803d', dateAp, zoneAp);
 
       // Flèche centrale entre les 2 images
       const cxF = this.M + 6 + colW + gap / 2;
@@ -1594,15 +1608,15 @@
       const groupes = grouperPhotosPourRapport(photosBrutes, false);
       for (const g of groupes) {
         if (g.type === 'paire') {
-          const zoneW = zoneReperePaire(g);
-          const centreW = { cx: zoneW.x + zoneW.w / 2, cy: zoneW.y + zoneW.h / 2 };
+          const zonesW = zonesSeparées(g);
+          const zoneAvW = zonesW.avant, zoneApW = zonesW.apres;
           const dateAvW = datePhotoFr(g.avant), dateApW = datePhotoFr(g.apres);
           doc.para('⚖ Comparatif AVANT / APRÈS' + (g.legende || contexte ? ' — ' + (g.legende || contexte) : '')
             + (dateAvW || dateApW ? '  (' + [dateAvW ? 'Avant ' + dateAvW : '', dateApW ? 'Après ' + dateApW : ''].filter(Boolean).join(' · ') + ')' : ''),
             { gras: true, taille: 9.5, couleur: '332E72', avant: 60, apres: 30 });
-          const jAv = await toJpegRecadreZone(g.avant.dataUrl, 1.35, zoneW, 1000, 0.87);
+          const jAv = await toJpegRecadreZone(g.avant.dataUrl, 1.35, zoneAvW, 1000, 0.87);
           if (jAv) doc.image(jAv.dataUrl, 10.5, { legende: 'AVANT' + (dateAvW ? ' — ' + dateAvW : '') + (g.avant.legende ? ' — ' + g.avant.legende : '') });
-          const jAp = await toJpegRecadreZone(g.apres.dataUrl, 1.35, zoneW, 1000, 0.87);
+          const jAp = await toJpegRecadreZone(g.apres.dataUrl, 1.35, zoneApW, 1000, 0.87);
           if (jAp) doc.image(jAp.dataUrl, 10.5, { legende: 'APRÈS' + (dateApW ? ' — ' + dateApW : '') + (g.apres.legende ? ' — ' + g.apres.legende : '') });
           const chgW = changmentPaire(g);
           if (chgW) doc.para([{ t: 'Changement : ', gras: true, couleur: '332E72' }, { t: chgW }], { avant: 40, apres: 100 });
@@ -1854,6 +1868,7 @@
     ZONE_DEFAUT: ZONE_DEFAUT,
     zoneRepereNorm: zoneRepereNorm,
     zoneReperePaire: zoneReperePaire,
+    zonesSeparées: zonesSeparées,
     changmentPaire: changmentPaire,
     changementPaire: changmentPaire,
     estWeekEnd: estWeekEnd,

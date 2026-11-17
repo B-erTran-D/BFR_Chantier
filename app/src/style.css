@@ -3924,15 +3924,37 @@ body.mode-rsav .actionbar #btnAjouterPiece { flex: 1 1 100%; }
 
 /* Zone de repère commune Avant / Après (déplaçable au doigt) */
 .ph-zone-wrap { position: relative; }
+.ph-duo-img {
+  height: auto;
+  aspect-ratio: 1.35 / 1;
+  max-height: 190px;
+}
 .ph-zone {
   position: absolute;
-  border: 2px dashed var(--bfr-primary);
-  background: rgba(6, 186, 242, 0.10);
+  border: 2.5px dashed var(--bfr-primary);
+  background: rgba(6, 186, 242, 0.16);
   border-radius: 3px;
   cursor: move;
   touch-action: none;
-  z-index: 3;
+  z-index: 5;
   box-sizing: border-box;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.7) inset;
+  min-width: 44px;
+  min-height: 32px;
+}
+.ph-zone-lib {
+  position: absolute;
+  top: -9px;
+  left: -2px;
+  background: var(--bfr-primary);
+  color: #fff;
+  font-family: var(--font-heading);
+  font-size: 9px;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: 999px;
+  white-space: nowrap;
+  pointer-events: none;
 }
 .ph-zone-handle {
   position: absolute;
@@ -4060,6 +4082,8 @@ body.mode-rsav .actionbar #btnAjouterPiece { flex: 1 1 100%; }
   pointer-events: none;
   box-sizing: border-box;
 }
+.cmp-zone.avant { border-color: #f59e0b; background: rgba(245, 158, 11, 0.12); }
+.cmp-zone.apres { border-color: #10b981; background: rgba(16, 185, 129, 0.12); }
 .comparateur-pied {
   margin-top: 8px;
   font-size: 12.5px;

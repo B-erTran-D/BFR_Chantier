@@ -1,5 +1,5 @@
 /* Service Worker — BFR Chantier (100 % hors connexion) */
-const CACHE = 'bfr-chantier-0138d429ac';
+const CACHE = 'bfr-chantier-1830c7c90a';
 const FICHIERS = [
   './',
   './index.html',
