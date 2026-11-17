@@ -3940,6 +3940,151 @@ body.mode-rsav .actionbar #btnAjouterPiece { flex: 1 1 100%; }
   padding: 3px 9px;
   flex-shrink: 0;
 }
+
+/* Zone de repère commune Avant / Après (déplaçable au doigt) */
+.ph-zone-wrap { position: relative; }
+.ph-zone {
+  position: absolute;
+  border: 2px dashed var(--bfr-primary);
+  background: rgba(6, 186, 242, 0.10);
+  border-radius: 3px;
+  cursor: move;
+  touch-action: none;
+  z-index: 3;
+  box-sizing: border-box;
+}
+.ph-zone-handle {
+  position: absolute;
+  right: -7px;
+  bottom: -7px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--bfr-primary);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+  cursor: nwse-resize;
+  touch-action: none;
+}
+
+/* Comparateur Avant / Après à curseur (app uniquement) */
+.comparateur-fond {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.82);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  box-sizing: border-box;
+}
+.comparateur-boite {
+  background: #fff;
+  border-radius: 12px;
+  padding: 10px;
+  width: 100%;
+  max-width: 640px;
+  max-height: 92vh;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+.comparateur-hdr {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-heading);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--bfr-secondary);
+  margin-bottom: 8px;
+}
+.comparateur-zone {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  max-height: 62vh;
+  background: #0f172a;
+  border-radius: 8px;
+  overflow: hidden;
+  touch-action: none;
+  cursor: ew-resize;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.comparateur-zone .cmp-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
+}
+.cmp-avant-wrap {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+.cmp-diviseur {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: #fff;
+  transform: translateX(-50%);
+  box-shadow: 0 0 6px rgba(0,0,0,0.5);
+  z-index: 5;
+  pointer-events: none;
+}
+.cmp-poignee {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--bfr-primary);
+  color: #fff;
+  border: 2px solid #fff;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 800;
+}
+.cmp-badge {
+  position: absolute;
+  top: 8px;
+  z-index: 6;
+  font-family: var(--font-heading);
+  font-size: 10.5px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 999px;
+  color: #fff;
+  pointer-events: none;
+}
+.cmp-badge.avant { left: 8px; background: #b45309; }
+.cmp-badge.apres { right: 8px; background: #15803d; }
+.cmp-zone {
+  position: absolute;
+  border: 2px dashed var(--bfr-primary);
+  background: rgba(6, 186, 242, 0.10);
+  border-radius: 3px;
+  z-index: 4;
+  pointer-events: none;
+  box-sizing: border-box;
+}
+.comparateur-pied {
+  margin-top: 8px;
+  font-size: 12.5px;
+  color: var(--bfr-text);
+  text-align: center;
+}
 </style>
 </head>
 <body>
@@ -4169,7 +4314,9 @@ body.mode-rsav .actionbar #btnAjouterPiece { flex: 1 1 100%; }
       if (opt.fill) { op += opt.fill.join(' ') + ' rg '; op += `${f(x)} ${f(this._ty(y + h))} ${f(w)} ${f(h)} re f `; }
       if (opt.stroke) {
         op += `${f(opt.lineWidth || 0.7)} w ${opt.stroke.join(' ')} RG `;
+        if (opt.dash && opt.dash.length) op += `[${opt.dash.join(' ')}] 0 d `;
         op += `${f(x)} ${f(this._ty(y + h))} ${f(w)} ${f(h)} re S `;
+        if (opt.dash && opt.dash.length) op += `[] 0 d `;
       }
       this.page.ops.push(op + 'Q');
     }
@@ -4356,7 +4503,7 @@ body.mode-rsav .actionbar #btnAjouterPiece { flex: 1 1 100%; }
     }
     rect(x, y, w, h, opt) {
       opt = opt || {};
-      this.page.ops.push({ t: 'rect', x: x, y: y, w: w, h: h, fill: opt.fill, stroke: opt.stroke, lw: opt.lineWidth || 0.7 });
+      this.page.ops.push({ t: 'rect', x: x, y: y, w: w, h: h, fill: opt.fill, stroke: opt.stroke, lw: opt.lineWidth || 0.7, dash: opt.dash || null });
     }
     line(x1, y1, x2, y2, opt) {
       opt = opt || {};
@@ -4466,7 +4613,9 @@ body.mode-rsav .actionbar #btnAjouterPiece { flex: 1 1 100%; }
             if (o.stroke) {
               ctx.strokeStyle = COULEUR_CSS(o.stroke);
               ctx.lineWidth = Math.max(0.5, o.lw * E);
+              if (o.dash && o.dash.length) ctx.setLineDash(o.dash.map(d => d * E));
               ctx.strokeRect(o.x * E, o.y * E, o.w * E, o.h * E);
+              if (o.dash && o.dash.length) ctx.setLineDash([]);
             }
           } else if (o.t === 'line') {
             ctx.strokeStyle = COULEUR_CSS(o.color);
@@ -6650,6 +6799,104 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
     });
   }
 
+  /* Zone de repère commune Avant/Après (coordonnées relatives 0..1) */
+  const ZONE_DEFAUT = { x: 0.32, y: 0.32, w: 0.36, h: 0.36 };
+
+  function zoneRepereNorm(zone) {
+    if (!zone || typeof zone !== 'object') return null;
+    let x = Number(zone.x), y = Number(zone.y), w = Number(zone.w), h = Number(zone.h);
+    if (!isFinite(x) || !isFinite(y) || !isFinite(w) || !isFinite(h)) return null;
+    w = Math.min(0.9, Math.max(0.08, w));
+    h = Math.min(0.9, Math.max(0.08, h));
+    x = Math.min(1 - w, Math.max(0, x));
+    y = Math.min(1 - h, Math.max(0, y));
+    return { x: x, y: y, w: w, h: h };
+  }
+
+  function zoneReperePaire(paire) {
+    const z = zoneRepereNorm(paire && paire.avant && paire.avant.zoneRepere)
+      || zoneRepereNorm(paire && paire.apres && paire.apres.zoneRepere);
+    return z || Object.assign({}, ZONE_DEFAUT);
+  }
+
+  function changmentPaire(paire) {
+    return valeur(paire && paire.avant && paire.avant.changement)
+      || valeur(paire && paire.apres && paire.apres.changement) || '';
+  }
+
+  function datePhotoFr(photo) {
+    return frDate(photo && photo.datePrise) || '';
+  }
+
+  /** Recadre une image au ratio cible (cover, centré sur centreCx/Cy) pour un rendu Avant/Après au même format. */
+  function toJpegRecadre(dataUrl, ratioCible, maxLargeur, qualite, centre) {
+    return new Promise(function (resolve) {
+      if (!dataUrl || !ratioCible || ratioCible <= 0) { toJpeg(dataUrl, maxLargeur, qualite).then(resolve); return; }
+      const img = new Image();
+      img.onload = function () {
+        try {
+          const w0 = img.naturalWidth || img.width || 400;
+          const h0 = img.naturalHeight || img.height || 300;
+          const ratioImg = w0 / h0;
+          let sx = 0, sy = 0, sw = w0, sh = h0;
+          if (ratioImg > ratioCible) {
+            sw = Math.round(h0 * ratioCible);
+            const cx = centre && isFinite(centre.cx) ? centre.cx : 0.5;
+            sx = Math.round(Math.min(w0 - sw, Math.max(0, cx * w0 - sw / 2)));
+          } else if (ratioImg < ratioCible) {
+            sh = Math.round(w0 / ratioCible);
+            const cy = centre && isFinite(centre.cy) ? centre.cy : 0.5;
+            sy = Math.round(Math.min(h0 - sh, Math.max(0, cy * h0 - sh / 2)));
+          }
+          const ratioSortie = Math.min(1, (maxLargeur || 1000) / Math.max(sw, sh));
+          const w = Math.max(1, Math.round(sw * ratioSortie));
+          const h = Math.max(1, Math.round(sh * ratioSortie));
+          const c = document.createElement('canvas');
+          c.width = w; c.height = h;
+          const ctx = c.getContext('2d');
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, w, h);
+          ctx.drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
+          const sortie = c.toDataURL('image/jpeg', qualite || 0.87);
+          if (!sortie || sortie.indexOf('data:image') !== 0) { toJpeg(dataUrl, maxLargeur, qualite).then(resolve); return; }
+          resolve({ dataUrl: sortie, w: w, h: h });
+        } catch (e) {
+          toJpeg(dataUrl, maxLargeur, qualite).then(resolve);
+        }
+      };
+      img.onerror = function () { toJpeg(dataUrl, maxLargeur, qualite).then(resolve); };
+      img.src = dataUrl;
+    });
+  }
+
+  /** Même recadrage + zone de repère dessinée en pointillés cyan (pour Word, où le vectoriel n'est pas possible). */
+  function toJpegRecadreZone(dataUrl, ratioCible, zone, maxLargeur, qualite) {
+    return new Promise(function (resolve) {
+      const centre = zone ? { cx: zone.x + zone.w / 2, cy: zone.y + zone.h / 2 } : null;
+      toJpegRecadre(dataUrl, ratioCible, maxLargeur, qualite, centre).then(function (j) {
+        if (!j || !zone) { resolve(j); return; }
+        try {
+          const img = new Image();
+          img.onload = function () {
+            const c = document.createElement('canvas');
+            c.width = j.w; c.height = j.h;
+            const ctx = c.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            ctx.strokeStyle = '#06baf2';
+            ctx.lineWidth = Math.max(2, Math.round(j.w * 0.006));
+            ctx.setLineDash([Math.max(6, j.w * 0.02), Math.max(5, j.w * 0.015)]);
+            ctx.strokeRect(zone.x * j.w, zone.y * j.h, zone.w * j.w, zone.h * j.h);
+            const sortieZ = c.toDataURL('image/jpeg', qualite || 0.87);
+            if (!sortieZ || sortieZ.indexOf('data:image') !== 0) { resolve(j); return; }
+            resolve({ dataUrl: sortieZ, w: j.w, h: j.h });
+          };
+          img.onerror = function () { resolve(j); };
+          img.src = j.dataUrl;
+        } catch (e) { resolve(j); }
+      });
+    });
+  }
+
   /* ===================== Calcul du bilan chantier & jour ============== */
   function estIsoDate(s) {
     return /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''));
@@ -7325,49 +7572,88 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       }
     }
 
-    /* Cadre comparatif AVANT / APRES côte à côte */
+    /* Cadre comparatif AVANT / APRES : images grandes au même ratio, date incrustée,
+       zone de repère commune en pointillés cyan, flèche centrale, ligne Changement */
     async photoPaireAvantApres(paire, contexte) {
-      const jAv = await toJpeg(paire.avant.dataUrl, 1000, 0.85);
-      const jAp = await toJpeg(paire.apres.dataUrl, 1000, 0.85);
+      const gap = 18;
+      const colW = (this.CW - gap - 12) / 2;
+      const hImg = 185;
+      const ratioCible = (colW - 4) / (hImg - 4);
+      const zone = zoneReperePaire(paire);
+      const centreZone = { cx: zone.x + zone.w / 2, cy: zone.y + zone.h / 2 };
+      const jAv = await toJpegRecadre(paire.avant.dataUrl, ratioCible, 1000, 0.87, centreZone);
+      const jAp = await toJpegRecadre(paire.apres.dataUrl, ratioCible, 1000, 0.87, centreZone);
       if (!jAv && !jAp) return;
       const p = this.pdf, C = this.C;
-      const gap = 8;
-      const colW = (this.CW - gap - 12) / 2;
-      const hImg = 148;
       const legGlobale = [paire.legende, contexte].filter(Boolean)[0] || '';
-      const hTot = 18 + 15 + hImg + (legGlobale ? 15 : 4) + 6;
+      const changment = changmentPaire(paire);
+      const lignesChg = changment ? Pdf.wrap('Changement : ' + changment, this.CW - 24, 8.8) : [];
+      const hEnt = 20, hLab = 15;
+      const hPied = (legGlobale ? 14 : 2) + (lignesChg.length ? lignesChg.length * 12 + 4 : 0) + 6;
+      const hTot = hEnt + 4 + hLab + hImg + hPied + 6;
 
       this.saut(hTot);
       const y0 = p.y;
       p.rect(this.M, y0, this.CW, hTot - 4, { fill: [0.985, 0.995, 1], stroke: CYAN, lineWidth: 0.6 });
-      p.rect(this.M, y0, this.CW, 16, { fill: C.cyanClair });
+      // En-tête navy (contraste) : titre à gauche, contexte/machine à droite si court
+      p.rect(this.M, y0, this.CW, hEnt, { fill: C.navy });
       const numP = ++this.numeroPhoto;
-      p.text('COMPARATIF AVANT / APRES  —  PHOTO ' + numP, this.M + 8, y0 + 11.2, { size: 8.0, font: 'F2', color: C.navy, bold: true });
+      p.text('COMPARATIF AVANT / APRES  —  PHOTO ' + numP, this.M + 8, y0 + 13.5, { size: 8.2, font: 'F2', color: C.blanc, bold: true });
+      const dateAv = datePhotoFr(paire.avant), dateAp = datePhotoFr(paire.apres);
+      const txtDates = [dateAv ? 'AVANT ' + dateAv : '', dateAp ? 'APRES ' + dateAp : ''].filter(Boolean).join('  ·  ');
+      if (txtDates) p.text(txtDates, this.W - this.M - 8, y0 + 13.5, { size: 7.6, color: C.blanc, align: 'right' });
 
-      const dessinerSlot = (j, idx, label, coulHex) => {
+      const dessinerSlot = (j, idx, label, coulHex, dateTxt) => {
         const sx = this.M + 6 + idx * (colW + gap);
-        const sy = y0 + 20;
-        p.rect(sx, sy, colW, 13, { fill: hexClair(coulHex, 0.86), stroke: hexRgb(coulHex), lineWidth: 0.4 });
-        p.text(label, sx + colW / 2, sy + 9.4, { size: 7.8, font: 'F2', color: hexRgb(coulHex), align: 'center', bold: true });
-        p.rect(sx, sy + 13, colW, hImg, { fill: [1, 1, 1], stroke: C.bord, lineWidth: 0.4 });
+        const sy = y0 + hEnt + 4;
+        p.rect(sx, sy, colW, hLab, { fill: hexClair(coulHex, 0.86), stroke: hexRgb(coulHex), lineWidth: 0.4 });
+        p.text(label, sx + colW / 2, sy + 10.6, { size: 8.2, font: 'F2', color: hexRgb(coulHex), align: 'center', bold: true });
+        const iy = sy + hLab;
+        p.rect(sx, iy, colW, hImg, { fill: [0.93, 0.95, 0.97], stroke: C.bord, lineWidth: 0.4 });
         if (j) {
           const bytes = Pdf.dataUrlToBytes(j.dataUrl);
-          const rImg = j.w / j.h, rBox = (colW - 4) / (hImg - 4);
-          let iw, ih;
-          if (rImg >= rBox) { iw = colW - 4; ih = iw / rImg; }
-          else { ih = hImg - 4; iw = ih * rImg; }
-          p.image(bytes, sx + 2 + (colW - 4 - iw) / 2, sy + 15 + (hImg - 4 - ih) / 2, iw, ih);
+          // Même ratio des 2 côtés : l'image remplit exactement le cadre (cover)
+          p.image(bytes, sx + 2, iy + 2, colW - 4, hImg - 4);
+          // Zone de repère commune (même position relative sur Avant et Après)
+          const zx = sx + 2 + zone.x * (colW - 4);
+          const zy = iy + 2 + zone.y * (hImg - 4);
+          const zw = zone.w * (colW - 4);
+          const zh = zone.h * (hImg - 4);
+          p.rect(zx, zy, zw, zh, { stroke: CYAN, lineWidth: 1.3, dash: [4, 3] });
+          // Date incrustée en bas à droite de l'image
+          if (dateTxt) {
+            const wBadge = Pdf.measure(dateTxt, 7.2, true) + 10;
+            const bx = sx + colW - 4 - wBadge, by = iy + hImg - 4 - 15;
+            p.rect(bx, by, wBadge, 13, { fill: [1, 1, 1], stroke: C.bord, lineWidth: 0.4 });
+            p.text(dateTxt, bx + wBadge / 2, by + 9.2, { size: 7.2, font: 'F2', color: C.navy, align: 'center', bold: true });
+          }
         }
       };
 
-      dessinerSlot(jAv, 0, 'AVANT', '#b45309');
-      dessinerSlot(jAp, 1, 'APRES', '#15803d');
+      dessinerSlot(jAv, 0, 'AVANT', '#b45309', dateAv);
+      dessinerSlot(jAp, 1, 'APRES', '#15803d', dateAp);
 
+      // Flèche centrale entre les 2 images
+      const cxF = this.M + 6 + colW + gap / 2;
+      const cyF = y0 + hEnt + 4 + hLab + hImg / 2;
+      p.rect(cxF - 8, cyF - 8, 16, 16, { fill: CYAN, stroke: C.blanc, lineWidth: 1 });
+      p.text('>', cxF, cyF + 3.2, { size: 10, font: 'F2', color: C.blanc, align: 'center', bold: true });
+
+      let yPied = y0 + hEnt + 4 + hLab + hImg + 4;
       if (legGlobale) {
-        p.text(Pdf.trunc(legGlobale, this.CW - 18, 8.2), this.M + this.CW / 2, y0 + 20 + 13 + hImg + 11,
-          { size: 8.2, color: C.gris, align: 'center' });
+        p.text(Pdf.trunc(legGlobale, this.CW - 18, 8.4), this.M + this.CW / 2, yPied + 9,
+          { size: 8.4, color: C.gris, align: 'center' });
+        yPied += 14;
       }
-      p.y = y0 + hTot + 3;
+      if (lignesChg.length) {
+        p.rect(this.M + 6, yPied, this.CW - 12, lignesChg.length * 12 + 8, { fill: [1, 1, 1], stroke: C.bord, lineWidth: 0.4 });
+        p.rect(this.M + 6, yPied, 3.5, lignesChg.length * 12 + 8, { fill: CYAN });
+        lignesChg.forEach((l, k) => {
+          p.text(l, this.M + 14, yPied + 10 + k * 12, { size: 8.8, color: C.texte });
+        });
+        yPied += lignesChg.length * 12 + 8;
+      }
+      p.y = y0 + hTot + 4;
     }
 
     /* Photos harmonisées (exclut Mémo interne BFR + gère les duos Avant / Après) */
@@ -7861,11 +8147,18 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       const groupes = grouperPhotosPourRapport(photosBrutes, false);
       for (const g of groupes) {
         if (g.type === 'paire') {
-          doc.para('⚖ Comparatif AVANT / APRÈS' + (g.legende || contexte ? ' — ' + (g.legende || contexte) : ''), { gras: true, taille: 9.5, couleur: '332E72', avant: 60, apres: 30 });
-          const jAv = await toJpeg(g.avant.dataUrl, 1000, 0.85);
-          if (jAv) doc.image(jAv.dataUrl, 9.5, { legende: 'AVANT' + (g.avant.legende ? ' — ' + g.avant.legende : '') });
-          const jAp = await toJpeg(g.apres.dataUrl, 1000, 0.85);
-          if (jAp) doc.image(jAp.dataUrl, 9.5, { legende: 'APRÈS' + (g.apres.legende ? ' — ' + g.apres.legende : '') });
+          const zoneW = zoneReperePaire(g);
+          const centreW = { cx: zoneW.x + zoneW.w / 2, cy: zoneW.y + zoneW.h / 2 };
+          const dateAvW = datePhotoFr(g.avant), dateApW = datePhotoFr(g.apres);
+          doc.para('⚖ Comparatif AVANT / APRÈS' + (g.legende || contexte ? ' — ' + (g.legende || contexte) : '')
+            + (dateAvW || dateApW ? '  (' + [dateAvW ? 'Avant ' + dateAvW : '', dateApW ? 'Après ' + dateApW : ''].filter(Boolean).join(' · ') + ')' : ''),
+            { gras: true, taille: 9.5, couleur: '332E72', avant: 60, apres: 30 });
+          const jAv = await toJpegRecadreZone(g.avant.dataUrl, 1.35, zoneW, 1000, 0.87);
+          if (jAv) doc.image(jAv.dataUrl, 10.5, { legende: 'AVANT' + (dateAvW ? ' — ' + dateAvW : '') + (g.avant.legende ? ' — ' + g.avant.legende : '') });
+          const jAp = await toJpegRecadreZone(g.apres.dataUrl, 1.35, zoneW, 1000, 0.87);
+          if (jAp) doc.image(jAp.dataUrl, 10.5, { legende: 'APRÈS' + (dateApW ? ' — ' + dateApW : '') + (g.apres.legende ? ' — ' + g.apres.legende : '') });
+          const chgW = changmentPaire(g);
+          if (chgW) doc.para([{ t: 'Changement : ', gras: true, couleur: '332E72' }, { t: chgW }], { avant: 40, apres: 100 });
         } else {
           const jp = await toJpeg(g.photo.dataUrl, 1000, 0.85);
           const pref = g.etiquette ? '[' + g.etiquette + '] ' : '';
@@ -8110,6 +8403,12 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
     jourSemaineFr: jourSemaineFr,
     nomComplet: nomComplet,
     toJpeg: toJpeg,
+    toJpegRecadre: toJpegRecadre,
+    ZONE_DEFAUT: ZONE_DEFAUT,
+    zoneRepereNorm: zoneRepereNorm,
+    zoneReperePaire: zoneReperePaire,
+    changmentPaire: changmentPaire,
+    changementPaire: changmentPaire,
     estWeekEnd: estWeekEnd,
     genererDatesPeriode: genererDatesPeriode,
     datesPlanifieesChantier: datesPlanifieesChantier,
@@ -9309,6 +9608,64 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
     </div>`;
   }
 
+  /* ===================== Comparateur Avant / Après à curseur (app uniquement) === */
+  function ouvrirComparateur(av, ap) {
+    if (!av || !ap || !av.dataUrl || !ap.dataUrl) return;
+    const zone = (av.zoneRepere && typeof av.zoneRepere === 'object') ? av.zoneRepere
+      : ((ap.zoneRepere && typeof ap.zoneRepere === 'object') ? ap.zoneRepere : null);
+    const dateAv = av.datePrise ? Report.frDate(av.datePrise) : '';
+    const dateAp = ap.datePrise ? Report.frDate(ap.datePrise) : '';
+    const leg = av.legende || ap.legende || '';
+    const chg = av.changement || ap.changement || '';
+    const fond = document.createElement('div');
+    fond.className = 'comparateur-fond';
+    fond.innerHTML = `
+      <div class="comparateur-boite">
+        <div class="comparateur-hdr">
+          <span>⚖️ Avant / Après — glissez pour comparer</span>
+          <button type="button" class="btn sm grey" data-cmp-fermer style="min-height:28px">✕ Fermer</button>
+        </div>
+        <div class="comparateur-zone">
+          <img class="cmp-img" src="${ap.dataUrl}" alt="Après">
+          <div class="cmp-avant-wrap"><img class="cmp-img" src="${av.dataUrl}" alt="Avant"></div>
+          ${zone ? `<div class="cmp-zone" style="left:${(zone.x * 100).toFixed(1)}%;top:${(zone.y * 100).toFixed(1)}%;width:${(zone.w * 100).toFixed(1)}%;height:${(zone.h * 100).toFixed(1)}%"></div>` : ''}
+          <div class="cmp-diviseur"><span class="cmp-poignee">↔</span></div>
+          <span class="cmp-badge avant">◀ AVANT${dateAv ? ' · ' + esc(dateAv) : ''}</span>
+          <span class="cmp-badge apres">APRÈS ▶${dateAp ? ' · ' + esc(dateAp) : ''}</span>
+        </div>
+        ${(leg || chg) ? `<div class="comparateur-pied">${leg ? esc(leg) : ''}${leg && chg ? ' — ' : ''}${chg ? '<strong>Changement : </strong>' + esc(chg) : ''}</div>` : ''}
+        <p class="hint" style="margin:6px 0 0;text-align:center">Glissez le curseur ◀ ▶ pour révéler l'Après sur l'Avant. La zone ◎ (si présente) est à la même position sur les 2 photos.</p>
+      </div>`;
+    document.body.appendChild(fond);
+    const zoneEl = fond.querySelector('.comparateur-zone');
+    const wrap = fond.querySelector('.cmp-avant-wrap');
+    const div = fond.querySelector('.cmp-diviseur');
+    let pos = 50;
+    const maj = () => {
+      wrap.style.clipPath = `inset(0 ${100 - pos}% 0 0)`;
+      div.style.left = pos + '%';
+    };
+    maj();
+    let enGlisse = false;
+    const majDepuisX = (clientX) => {
+      const r = zoneEl.getBoundingClientRect();
+      pos = Math.min(96, Math.max(4, ((clientX - r.left) / r.width) * 100));
+      maj();
+    };
+    zoneEl.addEventListener('pointerdown', (e) => {
+      enGlisse = true;
+      zoneEl.setPointerCapture(e.pointerId);
+      majDepuisX(e.clientX);
+      e.preventDefault();
+    });
+    zoneEl.addEventListener('pointermove', (e) => { if (enGlisse) majDepuisX(e.clientX); });
+    zoneEl.addEventListener('pointerup', () => { enGlisse = false; });
+    zoneEl.addEventListener('pointercancel', () => { enGlisse = false; });
+    const fermer = () => fond.remove();
+    fond.querySelector('[data-cmp-fermer]').addEventListener('click', fermer);
+    fond.addEventListener('click', (e) => { if (e.target === fond) fermer(); });
+  }
+
   /* ===================== Composant Photos unifié (Client / Mémo BFR + Avant / Après) === */
   function construireBlocPhotosHtml(photosBrutes, pfx, libelleTitre) {
     const phs = (photosBrutes || []).map((p, idx) => ({ p: p, idx: idx })).filter(x => x.p && x.p.dataUrl);
@@ -9367,10 +9724,18 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
             const idxAp = c.apres ? c.apres.idx : -1;
             const estInt = av.visibilite === 'interne';
             const pid = av.paireId || ('duo_' + idxAv);
+            const zoneBrute = (av.zoneRepere && typeof av.zoneRepere === 'object') ? av.zoneRepere : ((ap && ap.zoneRepere) || null);
+            const zoneActive = !!zoneBrute;
+            const zone = zoneActive ? zoneBrute : (Report.ZONE_DEFAUT || { x: 0.32, y: 0.32, w: 0.36, h: 0.36 });
+            const zoneStyle = `left:${(zone.x * 100).toFixed(1)}%;top:${(zone.y * 100).toFixed(1)}%;width:${(zone.w * 100).toFixed(1)}%;height:${(zone.h * 100).toFixed(1)}%`;
+            const dateAvTxt = av.datePrise ? Report.frDate(av.datePrise) : '';
+            const dateApTxt = ap && ap.datePrise ? Report.frDate(ap.datePrise) : '';
             return `<div class="ph-duo-card ${estInt ? 'interne' : ''}">
               <div class="ph-duo-hdr">
                 <span>⚖️ Comparatif Avant / Après</span>
-                <div style="display:flex;gap:5px;align-items:center">
+                <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
+                  ${ap ? `<button type="button" class="btn sm principal" data-ph-compare="${pfx}:${idxAv}" style="min-height:22px;padding:1px 7px;font-size:10px" title="Comparer en glissant le curseur">↔ Comparer</button>
+                  <button type="button" class="btn sm ${zoneActive ? 'principal' : 'grey'}" data-ph-zone="${pfx}:${idxAv}" style="min-height:22px;padding:1px 7px;font-size:10px" title="Afficher / masquer la zone de repère commune sur Avant et Après">◎ Zone</button>` : ''}
                   <button type="button" class="ph-vis-btn ${estInt ? 'interne' : 'client'}" style="position:static" data-ph-vis="${pfx}:${idxAv}" title="Basculer Rapport Client / Mémo interne BFR">
                     ${estInt ? '🔒 Mémo BFR' : '📄 PDF Client'}
                   </button>
@@ -9379,9 +9744,10 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
               </div>
               <div class="ph-duo-cols">
                 <div class="ph-duo-slot">
-                  <div class="ph-duo-tag avant">◀ AVANT</div>
-                  <div class="ph-img-wrap" style="height:92px">
+                  <div class="ph-duo-tag avant">◀ AVANT${dateAvTxt ? ' · ' + esc(dateAvTxt) : ''}</div>
+                  <div class="ph-img-wrap ph-zone-wrap" style="height:110px">
                     <img src="${av.dataUrl}" alt="Avant" data-ph-annot="${pfx}:${idxAv}">
+                    ${zoneActive ? `<div class="ph-zone" data-ph-zone-box="${pfx}:${idxAv}" style="${zoneStyle}"><span class="ph-zone-handle" data-ph-zone-handle="${pfx}:${idxAv}"></span></div>` : ''}
                   </div>
                   <div style="padding:4px;display:flex;gap:4px">
                     <button type="button" class="btn sm ghost" data-ph-annot="${pfx}:${idxAv}" style="min-height:24px;padding:1px 5px;font-size:10.5px;flex:1">${ICO.pen(11)} Annoter</button>
@@ -9389,10 +9755,11 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
                   </div>
                 </div>
                 <div class="ph-duo-slot">
-                  <div class="ph-duo-tag apres">APRÈS ▶</div>
+                  <div class="ph-duo-tag apres">APRÈS ▶${dateApTxt ? ' · ' + esc(dateApTxt) : ''}</div>
                   ${ap ? `
-                    <div class="ph-img-wrap" style="height:92px">
+                    <div class="ph-img-wrap ph-zone-wrap" style="height:110px">
                       <img src="${ap.dataUrl}" alt="Après" data-ph-annot="${pfx}:${idxAp}">
+                      ${zoneActive ? `<div class="ph-zone" data-ph-zone-box="${pfx}:${idxAv}" style="${zoneStyle}"><span class="ph-zone-handle" data-ph-zone-handle="${pfx}:${idxAv}"></span></div>` : ''}
                     </div>
                     <div style="padding:4px;display:flex;gap:4px">
                       <button type="button" class="btn sm ghost" data-ph-annot="${pfx}:${idxAp}" style="min-height:24px;padding:1px 5px;font-size:10.5px;flex:1">${ICO.pen(11)} Annoter</button>
@@ -9408,6 +9775,8 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
                 </div>
               </div>
               <input type="text" data-ph-leg="${pfx}:${idxAv}" value="${esc(av.legende || (ap && ap.legende) || '')}" placeholder="Légende commune Avant / Après…" style="margin-top:6px;font-size:11.5px;padding:5px 7px;border:1px solid var(--bfr-border);border-radius:5px;width:100%;background:#fff">
+              <input type="text" data-ph-chg="${pfx}:${idxAv}" value="${esc(av.changement || (ap && ap.changement) || '')}" placeholder="Changement constaté (ex. : alignement refait, capteur remplacé…)" style="margin-top:5px;font-size:11.5px;padding:5px 7px;border:1px solid var(--bfr-primary-border);border-radius:5px;width:100%;background:#f0fbff">
+              ${zoneActive ? '<p class="hint" style="margin:4px 0 0;font-size:10.5px">◎ Zone de repère : glissez le rectangle sur les photos pour le placer sur le détail à comparer (même position sur Avant et Après).</p>' : ''}
             </div>`;
           }
 
@@ -9451,6 +9820,105 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       });
     });
 
+    // Saisie Changement constaté (commun à la paire Avant/Après)
+    $$(`[data-ph-chg^="${pfx}:"]`, conteneur).forEach(inp => {
+      inp.addEventListener('input', () => {
+        const idx = Number(inp.dataset.phChg.split(':')[1]);
+        const arr = getListePhotos();
+        const ph = arr && arr[idx];
+        if (!ph) return;
+        ph.changement = inp.value;
+        if (ph.paireId) {
+          arr.forEach(x => { if (x && x !== ph && x.paireId === ph.paireId) x.changement = inp.value; });
+        }
+        planifierSauvegarde();
+      });
+    });
+
+    // Bouton Comparer (curseur Avant/Après)
+    $$(`[data-ph-compare^="${pfx}:"]`, conteneur).forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idxAv = Number(btn.dataset.phCompare.split(':')[1]);
+        const arr = getListePhotos();
+        const av = arr && arr[idxAv];
+        if (!av) return;
+        const ap = arr.find(x => x && x !== av && x.paireId && av.paireId && x.paireId === av.paireId && x.avantApres === 'apres')
+          || arr.find(x => x && x !== av && x.avantApres === 'apres' && !x.paireId);
+        if (ap) ouvrirComparateur(av, ap);
+      });
+    });
+
+    // Bouton Zone de repère (on/off, synchronisé sur la paire)
+    $$(`[data-ph-zone^="${pfx}:"]`, conteneur).forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (avantModif) avantModif();
+        const idxAv = Number(btn.dataset.phZone.split(':')[1]);
+        const arr = getListePhotos();
+        const av = arr && arr[idxAv];
+        if (!av) return;
+        const pid = av.paireId;
+        const mates = arr.filter(x => x && ((pid && x.paireId === pid) || x === av));
+        const actif = mates.some(x => x.zoneRepere && typeof x.zoneRepere === 'object');
+        const nouvelleZone = actif ? null : Object.assign({}, Report.ZONE_DEFAUT || { x: 0.32, y: 0.32, w: 0.36, h: 0.36 });
+        mates.forEach(x => { x.zoneRepere = nouvelleZone ? Object.assign({}, nouvelleZone) : null; });
+        planifierSauvegarde();
+        rafraichir();
+        toast(nouvelleZone ? '◎ Zone de repère affichée — glissez-la sur le détail à comparer' : 'Zone de repère masquée');
+      });
+    });
+
+    // Glisser-déposer de la zone de repère (déplacer + redimensionner, synchronisé Avant/Après)
+    $$(`[data-ph-zone-box^="${pfx}:"]`, conteneur).forEach(box => {
+      const idxAv = Number(box.dataset.phZoneBox.split(':')[1]);
+      const appliquerZoneDom = (zone) => {
+        $$(`[data-ph-zone-box="${pfx}:${idxAv}"]`, conteneur).forEach(b => {
+          b.style.left = (zone.x * 100).toFixed(1) + '%';
+          b.style.top = (zone.y * 100).toFixed(1) + '%';
+          b.style.width = (zone.w * 100).toFixed(1) + '%';
+          b.style.height = (zone.h * 100).toFixed(1) + '%';
+        });
+      };
+      const demarrer = (e, mode) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const arr = getListePhotos();
+        const av = arr && arr[idxAv];
+        if (!av || !av.zoneRepere) return;
+        const wrap = box.closest('.ph-zone-wrap');
+        if (!wrap) return;
+        const rect = wrap.getBoundingClientRect();
+        const zone0 = Object.assign({}, av.zoneRepere);
+        const x0 = e.clientX, y0 = e.clientY;
+        const pid = av.paireId;
+        const mates = arr.filter(x => x && ((pid && x.paireId === pid) || x === av));
+        const maj = (ev) => {
+          const dx = (ev.clientX - x0) / rect.width;
+          const dy = (ev.clientY - y0) / rect.height;
+          let z = Object.assign({}, zone0);
+          if (mode === 'move') {
+            z.x = Math.min(1 - z.w, Math.max(0, zone0.x + dx));
+            z.y = Math.min(1 - z.h, Math.max(0, zone0.y + dy));
+          } else {
+            z.w = Math.min(1 - zone0.x, Math.max(0.08, zone0.w + dx));
+            z.h = Math.min(1 - zone0.y, Math.max(0.08, zone0.h + dy));
+          }
+          mates.forEach(x => { x.zoneRepere = Object.assign({}, z); });
+          appliquerZoneDom(z);
+        };
+        const finir = () => {
+          document.removeEventListener('pointermove', maj);
+          document.removeEventListener('pointerup', finir);
+          planifierSauvegarde();
+        };
+        document.addEventListener('pointermove', maj);
+        document.addEventListener('pointerup', finir);
+      };
+      box.addEventListener('pointerdown', (e) => {
+        if (e.target.closest('[data-ph-zone-handle]')) demarrer(e, 'resize');
+        else demarrer(e, 'move');
+      });
+    });
+
     // Ajout photos (Caméra, Galerie ou Duo Avant/Après)
     $$(`[data-ph-add^="${pfx}:"]`, conteneur).forEach(inp => {
       inp.addEventListener('change', async () => {
@@ -9468,6 +9936,8 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
               id: uid(pfx === 'jour' ? 'phj' : 'pht'),
               dataUrl: dataUrl,
               legende: '',
+              changment: '',
+              zoneRepere: null,
               visibilite: 'client',
               avantApres: roleAA,
               paireId: roleAA ? paireId : '',
@@ -9504,6 +9974,8 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
             id: uid(pfx === 'jour' ? 'phj' : 'pht'),
             dataUrl: dataUrl,
             legende: (av && av.legende) || '',
+            changment: (av && av.changement) || '',
+            zoneRepere: (av && av.zoneRepere) || null,
             visibilite: (av && av.visibilite) || 'client',
             avantApres: 'apres',
             paireId: pid,
@@ -9568,6 +10040,38 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
         }
         planifierSauvegarde();
         rafraichir();
+      }
+      return true;
+    }
+
+    const bCmp = e.target.closest(`[data-ph-compare^="${pfx}:"]`);
+    if (bCmp) {
+      const idxAv = Number(bCmp.dataset.phCompare.split(':')[1]);
+      const arr = getListePhotos();
+      const av = arr && arr[idxAv];
+      if (av) {
+        const ap = arr.find(x => x && x !== av && x.paireId && av.paireId && x.paireId === av.paireId && x.avantApres === 'apres')
+          || arr.find(x => x && x !== av && x.avantApres === 'apres' && !x.paireId);
+        if (ap) ouvrirComparateur(av, ap);
+      }
+      return true;
+    }
+
+    const bZone = e.target.closest(`[data-ph-zone^="${pfx}:"]`);
+    if (bZone) {
+      if (avantModif) avantModif();
+      const idxAv = Number(bZone.dataset.phZone.split(':')[1]);
+      const arr = getListePhotos();
+      const av = arr && arr[idxAv];
+      if (av) {
+        const pid = av.paireId;
+        const mates = arr.filter(x => x && ((pid && x.paireId === pid) || x === av));
+        const actif = mates.some(x => x.zoneRepere && typeof x.zoneRepere === 'object');
+        const nouvelleZone = actif ? null : Object.assign({}, Report.ZONE_DEFAUT || { x: 0.32, y: 0.32, w: 0.36, h: 0.36 });
+        mates.forEach(x => { x.zoneRepere = nouvelleZone ? Object.assign({}, nouvelleZone) : null; });
+        planifierSauvegarde();
+        rafraichir();
+        toast(nouvelleZone ? '◎ Zone de repère affichée — glissez-la sur le détail à comparer' : 'Zone de repère masquée');
       }
       return true;
     }

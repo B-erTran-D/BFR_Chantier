@@ -246,6 +246,104 @@
     });
   }
 
+  /* Zone de repère commune Avant/Après (coordonnées relatives 0..1) */
+  const ZONE_DEFAUT = { x: 0.32, y: 0.32, w: 0.36, h: 0.36 };
+
+  function zoneRepereNorm(zone) {
+    if (!zone || typeof zone !== 'object') return null;
+    let x = Number(zone.x), y = Number(zone.y), w = Number(zone.w), h = Number(zone.h);
+    if (!isFinite(x) || !isFinite(y) || !isFinite(w) || !isFinite(h)) return null;
+    w = Math.min(0.9, Math.max(0.08, w));
+    h = Math.min(0.9, Math.max(0.08, h));
+    x = Math.min(1 - w, Math.max(0, x));
+    y = Math.min(1 - h, Math.max(0, y));
+    return { x: x, y: y, w: w, h: h };
+  }
+
+  function zoneReperePaire(paire) {
+    const z = zoneRepereNorm(paire && paire.avant && paire.avant.zoneRepere)
+      || zoneRepereNorm(paire && paire.apres && paire.apres.zoneRepere);
+    return z || Object.assign({}, ZONE_DEFAUT);
+  }
+
+  function changmentPaire(paire) {
+    return valeur(paire && paire.avant && paire.avant.changement)
+      || valeur(paire && paire.apres && paire.apres.changement) || '';
+  }
+
+  function datePhotoFr(photo) {
+    return frDate(photo && photo.datePrise) || '';
+  }
+
+  /** Recadre une image au ratio cible (cover, centré sur centreCx/Cy) pour un rendu Avant/Après au même format. */
+  function toJpegRecadre(dataUrl, ratioCible, maxLargeur, qualite, centre) {
+    return new Promise(function (resolve) {
+      if (!dataUrl || !ratioCible || ratioCible <= 0) { toJpeg(dataUrl, maxLargeur, qualite).then(resolve); return; }
+      const img = new Image();
+      img.onload = function () {
+        try {
+          const w0 = img.naturalWidth || img.width || 400;
+          const h0 = img.naturalHeight || img.height || 300;
+          const ratioImg = w0 / h0;
+          let sx = 0, sy = 0, sw = w0, sh = h0;
+          if (ratioImg > ratioCible) {
+            sw = Math.round(h0 * ratioCible);
+            const cx = centre && isFinite(centre.cx) ? centre.cx : 0.5;
+            sx = Math.round(Math.min(w0 - sw, Math.max(0, cx * w0 - sw / 2)));
+          } else if (ratioImg < ratioCible) {
+            sh = Math.round(w0 / ratioCible);
+            const cy = centre && isFinite(centre.cy) ? centre.cy : 0.5;
+            sy = Math.round(Math.min(h0 - sh, Math.max(0, cy * h0 - sh / 2)));
+          }
+          const ratioSortie = Math.min(1, (maxLargeur || 1000) / Math.max(sw, sh));
+          const w = Math.max(1, Math.round(sw * ratioSortie));
+          const h = Math.max(1, Math.round(sh * ratioSortie));
+          const c = document.createElement('canvas');
+          c.width = w; c.height = h;
+          const ctx = c.getContext('2d');
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, w, h);
+          ctx.drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
+          const sortie = c.toDataURL('image/jpeg', qualite || 0.87);
+          if (!sortie || sortie.indexOf('data:image') !== 0) { toJpeg(dataUrl, maxLargeur, qualite).then(resolve); return; }
+          resolve({ dataUrl: sortie, w: w, h: h });
+        } catch (e) {
+          toJpeg(dataUrl, maxLargeur, qualite).then(resolve);
+        }
+      };
+      img.onerror = function () { toJpeg(dataUrl, maxLargeur, qualite).then(resolve); };
+      img.src = dataUrl;
+    });
+  }
+
+  /** Même recadrage + zone de repère dessinée en pointillés cyan (pour Word, où le vectoriel n'est pas possible). */
+  function toJpegRecadreZone(dataUrl, ratioCible, zone, maxLargeur, qualite) {
+    return new Promise(function (resolve) {
+      const centre = zone ? { cx: zone.x + zone.w / 2, cy: zone.y + zone.h / 2 } : null;
+      toJpegRecadre(dataUrl, ratioCible, maxLargeur, qualite, centre).then(function (j) {
+        if (!j || !zone) { resolve(j); return; }
+        try {
+          const img = new Image();
+          img.onload = function () {
+            const c = document.createElement('canvas');
+            c.width = j.w; c.height = j.h;
+            const ctx = c.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            ctx.strokeStyle = '#06baf2';
+            ctx.lineWidth = Math.max(2, Math.round(j.w * 0.006));
+            ctx.setLineDash([Math.max(6, j.w * 0.02), Math.max(5, j.w * 0.015)]);
+            ctx.strokeRect(zone.x * j.w, zone.y * j.h, zone.w * j.w, zone.h * j.h);
+            const sortieZ = c.toDataURL('image/jpeg', qualite || 0.87);
+            if (!sortieZ || sortieZ.indexOf('data:image') !== 0) { resolve(j); return; }
+            resolve({ dataUrl: sortieZ, w: j.w, h: j.h });
+          };
+          img.onerror = function () { resolve(j); };
+          img.src = j.dataUrl;
+        } catch (e) { resolve(j); }
+      });
+    });
+  }
+
   /* ===================== Calcul du bilan chantier & jour ============== */
   function estIsoDate(s) {
     return /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''));
@@ -921,49 +1019,88 @@
       }
     }
 
-    /* Cadre comparatif AVANT / APRES côte à côte */
+    /* Cadre comparatif AVANT / APRES : images grandes au même ratio, date incrustée,
+       zone de repère commune en pointillés cyan, flèche centrale, ligne Changement */
     async photoPaireAvantApres(paire, contexte) {
-      const jAv = await toJpeg(paire.avant.dataUrl, 1000, 0.85);
-      const jAp = await toJpeg(paire.apres.dataUrl, 1000, 0.85);
+      const gap = 18;
+      const colW = (this.CW - gap - 12) / 2;
+      const hImg = 185;
+      const ratioCible = (colW - 4) / (hImg - 4);
+      const zone = zoneReperePaire(paire);
+      const centreZone = { cx: zone.x + zone.w / 2, cy: zone.y + zone.h / 2 };
+      const jAv = await toJpegRecadre(paire.avant.dataUrl, ratioCible, 1000, 0.87, centreZone);
+      const jAp = await toJpegRecadre(paire.apres.dataUrl, ratioCible, 1000, 0.87, centreZone);
       if (!jAv && !jAp) return;
       const p = this.pdf, C = this.C;
-      const gap = 8;
-      const colW = (this.CW - gap - 12) / 2;
-      const hImg = 148;
       const legGlobale = [paire.legende, contexte].filter(Boolean)[0] || '';
-      const hTot = 18 + 15 + hImg + (legGlobale ? 15 : 4) + 6;
+      const changment = changmentPaire(paire);
+      const lignesChg = changment ? Pdf.wrap('Changement : ' + changment, this.CW - 24, 8.8) : [];
+      const hEnt = 20, hLab = 15;
+      const hPied = (legGlobale ? 14 : 2) + (lignesChg.length ? lignesChg.length * 12 + 4 : 0) + 6;
+      const hTot = hEnt + 4 + hLab + hImg + hPied + 6;
 
       this.saut(hTot);
       const y0 = p.y;
       p.rect(this.M, y0, this.CW, hTot - 4, { fill: [0.985, 0.995, 1], stroke: CYAN, lineWidth: 0.6 });
-      p.rect(this.M, y0, this.CW, 16, { fill: C.cyanClair });
+      // En-tête navy (contraste) : titre à gauche, contexte/machine à droite si court
+      p.rect(this.M, y0, this.CW, hEnt, { fill: C.navy });
       const numP = ++this.numeroPhoto;
-      p.text('COMPARATIF AVANT / APRES  —  PHOTO ' + numP, this.M + 8, y0 + 11.2, { size: 8.0, font: 'F2', color: C.navy, bold: true });
+      p.text('COMPARATIF AVANT / APRES  —  PHOTO ' + numP, this.M + 8, y0 + 13.5, { size: 8.2, font: 'F2', color: C.blanc, bold: true });
+      const dateAv = datePhotoFr(paire.avant), dateAp = datePhotoFr(paire.apres);
+      const txtDates = [dateAv ? 'AVANT ' + dateAv : '', dateAp ? 'APRES ' + dateAp : ''].filter(Boolean).join('  ·  ');
+      if (txtDates) p.text(txtDates, this.W - this.M - 8, y0 + 13.5, { size: 7.6, color: C.blanc, align: 'right' });
 
-      const dessinerSlot = (j, idx, label, coulHex) => {
+      const dessinerSlot = (j, idx, label, coulHex, dateTxt) => {
         const sx = this.M + 6 + idx * (colW + gap);
-        const sy = y0 + 20;
-        p.rect(sx, sy, colW, 13, { fill: hexClair(coulHex, 0.86), stroke: hexRgb(coulHex), lineWidth: 0.4 });
-        p.text(label, sx + colW / 2, sy + 9.4, { size: 7.8, font: 'F2', color: hexRgb(coulHex), align: 'center', bold: true });
-        p.rect(sx, sy + 13, colW, hImg, { fill: [1, 1, 1], stroke: C.bord, lineWidth: 0.4 });
+        const sy = y0 + hEnt + 4;
+        p.rect(sx, sy, colW, hLab, { fill: hexClair(coulHex, 0.86), stroke: hexRgb(coulHex), lineWidth: 0.4 });
+        p.text(label, sx + colW / 2, sy + 10.6, { size: 8.2, font: 'F2', color: hexRgb(coulHex), align: 'center', bold: true });
+        const iy = sy + hLab;
+        p.rect(sx, iy, colW, hImg, { fill: [0.93, 0.95, 0.97], stroke: C.bord, lineWidth: 0.4 });
         if (j) {
           const bytes = Pdf.dataUrlToBytes(j.dataUrl);
-          const rImg = j.w / j.h, rBox = (colW - 4) / (hImg - 4);
-          let iw, ih;
-          if (rImg >= rBox) { iw = colW - 4; ih = iw / rImg; }
-          else { ih = hImg - 4; iw = ih * rImg; }
-          p.image(bytes, sx + 2 + (colW - 4 - iw) / 2, sy + 15 + (hImg - 4 - ih) / 2, iw, ih);
+          // Même ratio des 2 côtés : l'image remplit exactement le cadre (cover)
+          p.image(bytes, sx + 2, iy + 2, colW - 4, hImg - 4);
+          // Zone de repère commune (même position relative sur Avant et Après)
+          const zx = sx + 2 + zone.x * (colW - 4);
+          const zy = iy + 2 + zone.y * (hImg - 4);
+          const zw = zone.w * (colW - 4);
+          const zh = zone.h * (hImg - 4);
+          p.rect(zx, zy, zw, zh, { stroke: CYAN, lineWidth: 1.3, dash: [4, 3] });
+          // Date incrustée en bas à droite de l'image
+          if (dateTxt) {
+            const wBadge = Pdf.measure(dateTxt, 7.2, true) + 10;
+            const bx = sx + colW - 4 - wBadge, by = iy + hImg - 4 - 15;
+            p.rect(bx, by, wBadge, 13, { fill: [1, 1, 1], stroke: C.bord, lineWidth: 0.4 });
+            p.text(dateTxt, bx + wBadge / 2, by + 9.2, { size: 7.2, font: 'F2', color: C.navy, align: 'center', bold: true });
+          }
         }
       };
 
-      dessinerSlot(jAv, 0, 'AVANT', '#b45309');
-      dessinerSlot(jAp, 1, 'APRES', '#15803d');
+      dessinerSlot(jAv, 0, 'AVANT', '#b45309', dateAv);
+      dessinerSlot(jAp, 1, 'APRES', '#15803d', dateAp);
 
+      // Flèche centrale entre les 2 images
+      const cxF = this.M + 6 + colW + gap / 2;
+      const cyF = y0 + hEnt + 4 + hLab + hImg / 2;
+      p.rect(cxF - 8, cyF - 8, 16, 16, { fill: CYAN, stroke: C.blanc, lineWidth: 1 });
+      p.text('>', cxF, cyF + 3.2, { size: 10, font: 'F2', color: C.blanc, align: 'center', bold: true });
+
+      let yPied = y0 + hEnt + 4 + hLab + hImg + 4;
       if (legGlobale) {
-        p.text(Pdf.trunc(legGlobale, this.CW - 18, 8.2), this.M + this.CW / 2, y0 + 20 + 13 + hImg + 11,
-          { size: 8.2, color: C.gris, align: 'center' });
+        p.text(Pdf.trunc(legGlobale, this.CW - 18, 8.4), this.M + this.CW / 2, yPied + 9,
+          { size: 8.4, color: C.gris, align: 'center' });
+        yPied += 14;
       }
-      p.y = y0 + hTot + 3;
+      if (lignesChg.length) {
+        p.rect(this.M + 6, yPied, this.CW - 12, lignesChg.length * 12 + 8, { fill: [1, 1, 1], stroke: C.bord, lineWidth: 0.4 });
+        p.rect(this.M + 6, yPied, 3.5, lignesChg.length * 12 + 8, { fill: CYAN });
+        lignesChg.forEach((l, k) => {
+          p.text(l, this.M + 14, yPied + 10 + k * 12, { size: 8.8, color: C.texte });
+        });
+        yPied += lignesChg.length * 12 + 8;
+      }
+      p.y = y0 + hTot + 4;
     }
 
     /* Photos harmonisées (exclut Mémo interne BFR + gère les duos Avant / Après) */
@@ -1457,11 +1594,18 @@
       const groupes = grouperPhotosPourRapport(photosBrutes, false);
       for (const g of groupes) {
         if (g.type === 'paire') {
-          doc.para('⚖ Comparatif AVANT / APRÈS' + (g.legende || contexte ? ' — ' + (g.legende || contexte) : ''), { gras: true, taille: 9.5, couleur: '332E72', avant: 60, apres: 30 });
-          const jAv = await toJpeg(g.avant.dataUrl, 1000, 0.85);
-          if (jAv) doc.image(jAv.dataUrl, 9.5, { legende: 'AVANT' + (g.avant.legende ? ' — ' + g.avant.legende : '') });
-          const jAp = await toJpeg(g.apres.dataUrl, 1000, 0.85);
-          if (jAp) doc.image(jAp.dataUrl, 9.5, { legende: 'APRÈS' + (g.apres.legende ? ' — ' + g.apres.legende : '') });
+          const zoneW = zoneReperePaire(g);
+          const centreW = { cx: zoneW.x + zoneW.w / 2, cy: zoneW.y + zoneW.h / 2 };
+          const dateAvW = datePhotoFr(g.avant), dateApW = datePhotoFr(g.apres);
+          doc.para('⚖ Comparatif AVANT / APRÈS' + (g.legende || contexte ? ' — ' + (g.legende || contexte) : '')
+            + (dateAvW || dateApW ? '  (' + [dateAvW ? 'Avant ' + dateAvW : '', dateApW ? 'Après ' + dateApW : ''].filter(Boolean).join(' · ') + ')' : ''),
+            { gras: true, taille: 9.5, couleur: '332E72', avant: 60, apres: 30 });
+          const jAv = await toJpegRecadreZone(g.avant.dataUrl, 1.35, zoneW, 1000, 0.87);
+          if (jAv) doc.image(jAv.dataUrl, 10.5, { legende: 'AVANT' + (dateAvW ? ' — ' + dateAvW : '') + (g.avant.legende ? ' — ' + g.avant.legende : '') });
+          const jAp = await toJpegRecadreZone(g.apres.dataUrl, 1.35, zoneW, 1000, 0.87);
+          if (jAp) doc.image(jAp.dataUrl, 10.5, { legende: 'APRÈS' + (dateApW ? ' — ' + dateApW : '') + (g.apres.legende ? ' — ' + g.apres.legende : '') });
+          const chgW = changmentPaire(g);
+          if (chgW) doc.para([{ t: 'Changement : ', gras: true, couleur: '332E72' }, { t: chgW }], { avant: 40, apres: 100 });
         } else {
           const jp = await toJpeg(g.photo.dataUrl, 1000, 0.85);
           const pref = g.etiquette ? '[' + g.etiquette + '] ' : '';
@@ -1706,6 +1850,12 @@
     jourSemaineFr: jourSemaineFr,
     nomComplet: nomComplet,
     toJpeg: toJpeg,
+    toJpegRecadre: toJpegRecadre,
+    ZONE_DEFAUT: ZONE_DEFAUT,
+    zoneRepereNorm: zoneRepereNorm,
+    zoneReperePaire: zoneReperePaire,
+    changmentPaire: changmentPaire,
+    changementPaire: changmentPaire,
     estWeekEnd: estWeekEnd,
     genererDatesPeriode: genererDatesPeriode,
     datesPlanifieesChantier: datesPlanifieesChantier,

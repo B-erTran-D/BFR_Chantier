@@ -187,7 +187,9 @@
       if (opt.fill) { op += opt.fill.join(' ') + ' rg '; op += `${f(x)} ${f(this._ty(y + h))} ${f(w)} ${f(h)} re f `; }
       if (opt.stroke) {
         op += `${f(opt.lineWidth || 0.7)} w ${opt.stroke.join(' ')} RG `;
+        if (opt.dash && opt.dash.length) op += `[${opt.dash.join(' ')}] 0 d `;
         op += `${f(x)} ${f(this._ty(y + h))} ${f(w)} ${f(h)} re S `;
+        if (opt.dash && opt.dash.length) op += `[] 0 d `;
       }
       this.page.ops.push(op + 'Q');
     }
@@ -374,7 +376,7 @@
     }
     rect(x, y, w, h, opt) {
       opt = opt || {};
-      this.page.ops.push({ t: 'rect', x: x, y: y, w: w, h: h, fill: opt.fill, stroke: opt.stroke, lw: opt.lineWidth || 0.7 });
+      this.page.ops.push({ t: 'rect', x: x, y: y, w: w, h: h, fill: opt.fill, stroke: opt.stroke, lw: opt.lineWidth || 0.7, dash: opt.dash || null });
     }
     line(x1, y1, x2, y2, opt) {
       opt = opt || {};
@@ -484,7 +486,9 @@
             if (o.stroke) {
               ctx.strokeStyle = COULEUR_CSS(o.stroke);
               ctx.lineWidth = Math.max(0.5, o.lw * E);
+              if (o.dash && o.dash.length) ctx.setLineDash(o.dash.map(d => d * E));
               ctx.strokeRect(o.x * E, o.y * E, o.w * E, o.h * E);
+              if (o.dash && o.dash.length) ctx.setLineDash([]);
             }
           } else if (o.t === 'line') {
             ctx.strokeStyle = COULEUR_CSS(o.color);

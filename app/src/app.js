@@ -1179,6 +1179,64 @@
     </div>`;
   }
 
+  /* ===================== Comparateur Avant / Après à curseur (app uniquement) === */
+  function ouvrirComparateur(av, ap) {
+    if (!av || !ap || !av.dataUrl || !ap.dataUrl) return;
+    const zone = (av.zoneRepere && typeof av.zoneRepere === 'object') ? av.zoneRepere
+      : ((ap.zoneRepere && typeof ap.zoneRepere === 'object') ? ap.zoneRepere : null);
+    const dateAv = av.datePrise ? Report.frDate(av.datePrise) : '';
+    const dateAp = ap.datePrise ? Report.frDate(ap.datePrise) : '';
+    const leg = av.legende || ap.legende || '';
+    const chg = av.changement || ap.changement || '';
+    const fond = document.createElement('div');
+    fond.className = 'comparateur-fond';
+    fond.innerHTML = `
+      <div class="comparateur-boite">
+        <div class="comparateur-hdr">
+          <span>⚖️ Avant / Après — glissez pour comparer</span>
+          <button type="button" class="btn sm grey" data-cmp-fermer style="min-height:28px">✕ Fermer</button>
+        </div>
+        <div class="comparateur-zone">
+          <img class="cmp-img" src="${ap.dataUrl}" alt="Après">
+          <div class="cmp-avant-wrap"><img class="cmp-img" src="${av.dataUrl}" alt="Avant"></div>
+          ${zone ? `<div class="cmp-zone" style="left:${(zone.x * 100).toFixed(1)}%;top:${(zone.y * 100).toFixed(1)}%;width:${(zone.w * 100).toFixed(1)}%;height:${(zone.h * 100).toFixed(1)}%"></div>` : ''}
+          <div class="cmp-diviseur"><span class="cmp-poignee">↔</span></div>
+          <span class="cmp-badge avant">◀ AVANT${dateAv ? ' · ' + esc(dateAv) : ''}</span>
+          <span class="cmp-badge apres">APRÈS ▶${dateAp ? ' · ' + esc(dateAp) : ''}</span>
+        </div>
+        ${(leg || chg) ? `<div class="comparateur-pied">${leg ? esc(leg) : ''}${leg && chg ? ' — ' : ''}${chg ? '<strong>Changement : </strong>' + esc(chg) : ''}</div>` : ''}
+        <p class="hint" style="margin:6px 0 0;text-align:center">Glissez le curseur ◀ ▶ pour révéler l'Après sur l'Avant. La zone ◎ (si présente) est à la même position sur les 2 photos.</p>
+      </div>`;
+    document.body.appendChild(fond);
+    const zoneEl = fond.querySelector('.comparateur-zone');
+    const wrap = fond.querySelector('.cmp-avant-wrap');
+    const div = fond.querySelector('.cmp-diviseur');
+    let pos = 50;
+    const maj = () => {
+      wrap.style.clipPath = `inset(0 ${100 - pos}% 0 0)`;
+      div.style.left = pos + '%';
+    };
+    maj();
+    let enGlisse = false;
+    const majDepuisX = (clientX) => {
+      const r = zoneEl.getBoundingClientRect();
+      pos = Math.min(96, Math.max(4, ((clientX - r.left) / r.width) * 100));
+      maj();
+    };
+    zoneEl.addEventListener('pointerdown', (e) => {
+      enGlisse = true;
+      zoneEl.setPointerCapture(e.pointerId);
+      majDepuisX(e.clientX);
+      e.preventDefault();
+    });
+    zoneEl.addEventListener('pointermove', (e) => { if (enGlisse) majDepuisX(e.clientX); });
+    zoneEl.addEventListener('pointerup', () => { enGlisse = false; });
+    zoneEl.addEventListener('pointercancel', () => { enGlisse = false; });
+    const fermer = () => fond.remove();
+    fond.querySelector('[data-cmp-fermer]').addEventListener('click', fermer);
+    fond.addEventListener('click', (e) => { if (e.target === fond) fermer(); });
+  }
+
   /* ===================== Composant Photos unifié (Client / Mémo BFR + Avant / Après) === */
   function construireBlocPhotosHtml(photosBrutes, pfx, libelleTitre) {
     const phs = (photosBrutes || []).map((p, idx) => ({ p: p, idx: idx })).filter(x => x.p && x.p.dataUrl);
@@ -1237,10 +1295,18 @@
             const idxAp = c.apres ? c.apres.idx : -1;
             const estInt = av.visibilite === 'interne';
             const pid = av.paireId || ('duo_' + idxAv);
+            const zoneBrute = (av.zoneRepere && typeof av.zoneRepere === 'object') ? av.zoneRepere : ((ap && ap.zoneRepere) || null);
+            const zoneActive = !!zoneBrute;
+            const zone = zoneActive ? zoneBrute : (Report.ZONE_DEFAUT || { x: 0.32, y: 0.32, w: 0.36, h: 0.36 });
+            const zoneStyle = `left:${(zone.x * 100).toFixed(1)}%;top:${(zone.y * 100).toFixed(1)}%;width:${(zone.w * 100).toFixed(1)}%;height:${(zone.h * 100).toFixed(1)}%`;
+            const dateAvTxt = av.datePrise ? Report.frDate(av.datePrise) : '';
+            const dateApTxt = ap && ap.datePrise ? Report.frDate(ap.datePrise) : '';
             return `<div class="ph-duo-card ${estInt ? 'interne' : ''}">
               <div class="ph-duo-hdr">
                 <span>⚖️ Comparatif Avant / Après</span>
-                <div style="display:flex;gap:5px;align-items:center">
+                <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
+                  ${ap ? `<button type="button" class="btn sm principal" data-ph-compare="${pfx}:${idxAv}" style="min-height:22px;padding:1px 7px;font-size:10px" title="Comparer en glissant le curseur">↔ Comparer</button>
+                  <button type="button" class="btn sm ${zoneActive ? 'principal' : 'grey'}" data-ph-zone="${pfx}:${idxAv}" style="min-height:22px;padding:1px 7px;font-size:10px" title="Afficher / masquer la zone de repère commune sur Avant et Après">◎ Zone</button>` : ''}
                   <button type="button" class="ph-vis-btn ${estInt ? 'interne' : 'client'}" style="position:static" data-ph-vis="${pfx}:${idxAv}" title="Basculer Rapport Client / Mémo interne BFR">
                     ${estInt ? '🔒 Mémo BFR' : '📄 PDF Client'}
                   </button>
@@ -1249,9 +1315,10 @@
               </div>
               <div class="ph-duo-cols">
                 <div class="ph-duo-slot">
-                  <div class="ph-duo-tag avant">◀ AVANT</div>
-                  <div class="ph-img-wrap" style="height:92px">
+                  <div class="ph-duo-tag avant">◀ AVANT${dateAvTxt ? ' · ' + esc(dateAvTxt) : ''}</div>
+                  <div class="ph-img-wrap ph-zone-wrap" style="height:110px">
                     <img src="${av.dataUrl}" alt="Avant" data-ph-annot="${pfx}:${idxAv}">
+                    ${zoneActive ? `<div class="ph-zone" data-ph-zone-box="${pfx}:${idxAv}" style="${zoneStyle}"><span class="ph-zone-handle" data-ph-zone-handle="${pfx}:${idxAv}"></span></div>` : ''}
                   </div>
                   <div style="padding:4px;display:flex;gap:4px">
                     <button type="button" class="btn sm ghost" data-ph-annot="${pfx}:${idxAv}" style="min-height:24px;padding:1px 5px;font-size:10.5px;flex:1">${ICO.pen(11)} Annoter</button>
@@ -1259,10 +1326,11 @@
                   </div>
                 </div>
                 <div class="ph-duo-slot">
-                  <div class="ph-duo-tag apres">APRÈS ▶</div>
+                  <div class="ph-duo-tag apres">APRÈS ▶${dateApTxt ? ' · ' + esc(dateApTxt) : ''}</div>
                   ${ap ? `
-                    <div class="ph-img-wrap" style="height:92px">
+                    <div class="ph-img-wrap ph-zone-wrap" style="height:110px">
                       <img src="${ap.dataUrl}" alt="Après" data-ph-annot="${pfx}:${idxAp}">
+                      ${zoneActive ? `<div class="ph-zone" data-ph-zone-box="${pfx}:${idxAv}" style="${zoneStyle}"><span class="ph-zone-handle" data-ph-zone-handle="${pfx}:${idxAv}"></span></div>` : ''}
                     </div>
                     <div style="padding:4px;display:flex;gap:4px">
                       <button type="button" class="btn sm ghost" data-ph-annot="${pfx}:${idxAp}" style="min-height:24px;padding:1px 5px;font-size:10.5px;flex:1">${ICO.pen(11)} Annoter</button>
@@ -1278,6 +1346,8 @@
                 </div>
               </div>
               <input type="text" data-ph-leg="${pfx}:${idxAv}" value="${esc(av.legende || (ap && ap.legende) || '')}" placeholder="Légende commune Avant / Après…" style="margin-top:6px;font-size:11.5px;padding:5px 7px;border:1px solid var(--bfr-border);border-radius:5px;width:100%;background:#fff">
+              <input type="text" data-ph-chg="${pfx}:${idxAv}" value="${esc(av.changement || (ap && ap.changement) || '')}" placeholder="Changement constaté (ex. : alignement refait, capteur remplacé…)" style="margin-top:5px;font-size:11.5px;padding:5px 7px;border:1px solid var(--bfr-primary-border);border-radius:5px;width:100%;background:#f0fbff">
+              ${zoneActive ? '<p class="hint" style="margin:4px 0 0;font-size:10.5px">◎ Zone de repère : glissez le rectangle sur les photos pour le placer sur le détail à comparer (même position sur Avant et Après).</p>' : ''}
             </div>`;
           }
 
@@ -1321,6 +1391,105 @@
       });
     });
 
+    // Saisie Changement constaté (commun à la paire Avant/Après)
+    $$(`[data-ph-chg^="${pfx}:"]`, conteneur).forEach(inp => {
+      inp.addEventListener('input', () => {
+        const idx = Number(inp.dataset.phChg.split(':')[1]);
+        const arr = getListePhotos();
+        const ph = arr && arr[idx];
+        if (!ph) return;
+        ph.changement = inp.value;
+        if (ph.paireId) {
+          arr.forEach(x => { if (x && x !== ph && x.paireId === ph.paireId) x.changement = inp.value; });
+        }
+        planifierSauvegarde();
+      });
+    });
+
+    // Bouton Comparer (curseur Avant/Après)
+    $$(`[data-ph-compare^="${pfx}:"]`, conteneur).forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idxAv = Number(btn.dataset.phCompare.split(':')[1]);
+        const arr = getListePhotos();
+        const av = arr && arr[idxAv];
+        if (!av) return;
+        const ap = arr.find(x => x && x !== av && x.paireId && av.paireId && x.paireId === av.paireId && x.avantApres === 'apres')
+          || arr.find(x => x && x !== av && x.avantApres === 'apres' && !x.paireId);
+        if (ap) ouvrirComparateur(av, ap);
+      });
+    });
+
+    // Bouton Zone de repère (on/off, synchronisé sur la paire)
+    $$(`[data-ph-zone^="${pfx}:"]`, conteneur).forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (avantModif) avantModif();
+        const idxAv = Number(btn.dataset.phZone.split(':')[1]);
+        const arr = getListePhotos();
+        const av = arr && arr[idxAv];
+        if (!av) return;
+        const pid = av.paireId;
+        const mates = arr.filter(x => x && ((pid && x.paireId === pid) || x === av));
+        const actif = mates.some(x => x.zoneRepere && typeof x.zoneRepere === 'object');
+        const nouvelleZone = actif ? null : Object.assign({}, Report.ZONE_DEFAUT || { x: 0.32, y: 0.32, w: 0.36, h: 0.36 });
+        mates.forEach(x => { x.zoneRepere = nouvelleZone ? Object.assign({}, nouvelleZone) : null; });
+        planifierSauvegarde();
+        rafraichir();
+        toast(nouvelleZone ? '◎ Zone de repère affichée — glissez-la sur le détail à comparer' : 'Zone de repère masquée');
+      });
+    });
+
+    // Glisser-déposer de la zone de repère (déplacer + redimensionner, synchronisé Avant/Après)
+    $$(`[data-ph-zone-box^="${pfx}:"]`, conteneur).forEach(box => {
+      const idxAv = Number(box.dataset.phZoneBox.split(':')[1]);
+      const appliquerZoneDom = (zone) => {
+        $$(`[data-ph-zone-box="${pfx}:${idxAv}"]`, conteneur).forEach(b => {
+          b.style.left = (zone.x * 100).toFixed(1) + '%';
+          b.style.top = (zone.y * 100).toFixed(1) + '%';
+          b.style.width = (zone.w * 100).toFixed(1) + '%';
+          b.style.height = (zone.h * 100).toFixed(1) + '%';
+        });
+      };
+      const demarrer = (e, mode) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const arr = getListePhotos();
+        const av = arr && arr[idxAv];
+        if (!av || !av.zoneRepere) return;
+        const wrap = box.closest('.ph-zone-wrap');
+        if (!wrap) return;
+        const rect = wrap.getBoundingClientRect();
+        const zone0 = Object.assign({}, av.zoneRepere);
+        const x0 = e.clientX, y0 = e.clientY;
+        const pid = av.paireId;
+        const mates = arr.filter(x => x && ((pid && x.paireId === pid) || x === av));
+        const maj = (ev) => {
+          const dx = (ev.clientX - x0) / rect.width;
+          const dy = (ev.clientY - y0) / rect.height;
+          let z = Object.assign({}, zone0);
+          if (mode === 'move') {
+            z.x = Math.min(1 - z.w, Math.max(0, zone0.x + dx));
+            z.y = Math.min(1 - z.h, Math.max(0, zone0.y + dy));
+          } else {
+            z.w = Math.min(1 - zone0.x, Math.max(0.08, zone0.w + dx));
+            z.h = Math.min(1 - zone0.y, Math.max(0.08, zone0.h + dy));
+          }
+          mates.forEach(x => { x.zoneRepere = Object.assign({}, z); });
+          appliquerZoneDom(z);
+        };
+        const finir = () => {
+          document.removeEventListener('pointermove', maj);
+          document.removeEventListener('pointerup', finir);
+          planifierSauvegarde();
+        };
+        document.addEventListener('pointermove', maj);
+        document.addEventListener('pointerup', finir);
+      };
+      box.addEventListener('pointerdown', (e) => {
+        if (e.target.closest('[data-ph-zone-handle]')) demarrer(e, 'resize');
+        else demarrer(e, 'move');
+      });
+    });
+
     // Ajout photos (Caméra, Galerie ou Duo Avant/Après)
     $$(`[data-ph-add^="${pfx}:"]`, conteneur).forEach(inp => {
       inp.addEventListener('change', async () => {
@@ -1338,6 +1507,8 @@
               id: uid(pfx === 'jour' ? 'phj' : 'pht'),
               dataUrl: dataUrl,
               legende: '',
+              changment: '',
+              zoneRepere: null,
               visibilite: 'client',
               avantApres: roleAA,
               paireId: roleAA ? paireId : '',
@@ -1374,6 +1545,8 @@
             id: uid(pfx === 'jour' ? 'phj' : 'pht'),
             dataUrl: dataUrl,
             legende: (av && av.legende) || '',
+            changment: (av && av.changement) || '',
+            zoneRepere: (av && av.zoneRepere) || null,
             visibilite: (av && av.visibilite) || 'client',
             avantApres: 'apres',
             paireId: pid,
@@ -1438,6 +1611,38 @@
         }
         planifierSauvegarde();
         rafraichir();
+      }
+      return true;
+    }
+
+    const bCmp = e.target.closest(`[data-ph-compare^="${pfx}:"]`);
+    if (bCmp) {
+      const idxAv = Number(bCmp.dataset.phCompare.split(':')[1]);
+      const arr = getListePhotos();
+      const av = arr && arr[idxAv];
+      if (av) {
+        const ap = arr.find(x => x && x !== av && x.paireId && av.paireId && x.paireId === av.paireId && x.avantApres === 'apres')
+          || arr.find(x => x && x !== av && x.avantApres === 'apres' && !x.paireId);
+        if (ap) ouvrirComparateur(av, ap);
+      }
+      return true;
+    }
+
+    const bZone = e.target.closest(`[data-ph-zone^="${pfx}:"]`);
+    if (bZone) {
+      if (avantModif) avantModif();
+      const idxAv = Number(bZone.dataset.phZone.split(':')[1]);
+      const arr = getListePhotos();
+      const av = arr && arr[idxAv];
+      if (av) {
+        const pid = av.paireId;
+        const mates = arr.filter(x => x && ((pid && x.paireId === pid) || x === av));
+        const actif = mates.some(x => x.zoneRepere && typeof x.zoneRepere === 'object');
+        const nouvelleZone = actif ? null : Object.assign({}, Report.ZONE_DEFAUT || { x: 0.32, y: 0.32, w: 0.36, h: 0.36 });
+        mates.forEach(x => { x.zoneRepere = nouvelleZone ? Object.assign({}, nouvelleZone) : null; });
+        planifierSauvegarde();
+        rafraichir();
+        toast(nouvelleZone ? '◎ Zone de repère affichée — glissez-la sur le détail à comparer' : 'Zone de repère masquée');
       }
       return true;
     }
