@@ -8,6 +8,7 @@ Application web mobile **100 % hors connexion**, calquée sur la charte officiel
 - **Photos intelligentes : Rapport Client vs Mémo interne BFR & mode Avant / Après** : bascule en 1 appui entre **📄 PDF Client** et **🔒 Mémo BFR** (conservé dans l'app mais exclu des PDF/Word envoyés au client), **comparatif côte à côte AVANT / APRÈS**, et annotations au doigt (flèche, cercle, crayon, texte).
 - **Pilotage multi-jours (`Jour 1 … Jour N`) & indicateur de cadence** : planification automatique sur les dates du chantier (`Lun.→Ven.` ou `7j/7` + exclusion de jours fériés/off) et comparaison visuelle **Avancement % vs Jours écoulés** (*En avance / Conforme / Légère dérive / Retard planning*).
 - **Rapport quotidien PDF (et Word `.docx`) « brandé » BFR Systems** (sans signature client chaque soir) prêt à envoyer par e-mail aux personnes concernées par le projet (Client, Chef de projet BFR, Chargé d'affaires, SAV…).
+- **PV de fin de chantier signé** : bilan final automatique (avancement, tâches par machine/phase, checklist, blocages levés, photos Avant/Après), commentaire et réserves, confirmation de réception et signatures dessinées du client et du technicien BFR. Export PDF/Word et partage e-mail.
 
 ---
 
@@ -46,6 +47,7 @@ Le fichier **`Suivi-Chantier-BFR.html`** à la racine contient toute l'applicati
    - Complétez si besoin le **Journal du Jour** (bouton *✨ Brouillon auto* et *✨ Pré-remplir la suite* disponibles).
    - Vérifiez le rendu avec **👁️ Aperçu PDF** (affiché directement dans l'application), puis appuyez sur **📤 Envoyer le rapport quotidien** : le PDF BFR Systems est joint automatiquement au partage mobile (Gmail / Outlook) avec l'objet, le résumé d'avancement et les destinataires prêts.
    - Le lendemain matin, appuyez sur **`+ Jour`** en haut à droite pour ouvrir la nouvelle journée tout en conservant l'avancement cumulé du chantier !
+6. **À la fin du chantier — PV de réception** : dans la carte **PV de fin de chantier**, vérifiez la date, complétez le commentaire et les réserves éventuelles, faites cocher la réception par le client, puis recueillez sa signature au doigt/stylet et la signature du technicien BFR. Le PV complet peut ensuite être téléchargé en PDF ou Word, ou partagé par e-mail.
 
 ---
 

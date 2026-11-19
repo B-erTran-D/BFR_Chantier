@@ -287,6 +287,110 @@
     return frDate(photo && photo.datePrise) || '';
   }
 
+  /* ===================== PV de fin de chantier ====================== */
+  function clotureDe(chantier) {
+    const cl = (chantier && chantier.cloture) || {};
+    return {
+      commentaireFinal: valeur(cl.commentaireFinal),
+      reserves: valeur(cl.reserves),
+      dateFin: valeur(cl.dateFin),
+      receptionOk: cl.receptionOk === true,
+      signatureClient: cl.signatureClient || { nom: '', fonction: '', dataUrl: '', dateHeure: '' },
+      signatureTech: cl.signatureTech || { nom: '', dataUrl: '', dateHeure: '' },
+      clotureLe: valeur(cl.clotureLe)
+    };
+  }
+
+  function frDateHeure(isoTxt) {
+    const s = valeur(isoTxt);
+    if (!s) return '';
+    const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/.exec(s);
+    if (m) return m[3] + '/' + m[2] + '/' + m[1] + ' à ' + m[4] + 'h' + m[5];
+    return frDate(s) || s;
+  }
+
+  function dateFinaleChantier(chantier) {
+    const c = chantier || {};
+    const cl = c.cloture || {};
+    if (estIsoDate(cl.dateFin)) return cl.dateFin;
+    const datesActivite = [];
+    (c.taches || []).forEach(t => { if (t && t.statut === 'fait' && estIsoDate(t.faitLe)) datesActivite.push(t.faitLe); });
+    Object.keys(c.jours || {}).forEach(d => {
+      if (estIsoDate(d) && !estJourVide(c, d)) datesActivite.push(d);
+    });
+    if (datesActivite.length) return datesActivite.sort().pop();
+    if (estIsoDate(c.jourActif)) return c.jourActif;
+    if (estIsoDate(c.dateFinPrevue)) return c.dateFinPrevue;
+    return (estIsoDate(c.dateDebut) && c.dateDebut) || aujourdhuiLocalISO();
+  }
+
+  function datesPeriodePV(chantier, dateFin) {
+    const c = chantier || {};
+    if (estIsoDate(c.dateDebut) && estIsoDate(dateFin) && dateFin >= c.dateDebut) {
+      return genererDatesPeriode(c.dateDebut, dateFin, !!c.inclureWeekEnd, c.joursExclus);
+    }
+    const dates = datesJoursTriees(c, dateFin);
+    return dates.length ? dates : [dateFin || aujourdhuiLocalISO()];
+  }
+
+  function bilanFinChantier(chantier, dateFinForcee) {
+    const c = chantier || {};
+    const cl = clotureDe(c);
+    const dateFin = estIsoDate(dateFinForcee) ? dateFinForcee
+      : (estIsoDate(cl.dateFin) ? cl.dateFin : dateFinaleChantier(c));
+    const dates = datesPeriodePV(c, dateFin);
+    if (estIsoDate(dateFin) && !dates.includes(dateFin)) dates.push(dateFin);
+    dates.sort();
+    const b = calculerBilan(c, dateFin);
+    // Le PV est une synthèse de clôture, pas le rapport quotidien sélectionné dans l'application.
+    b.dateJour = dateFin;
+    b.datesJours = dates;
+    b.numeroJour = Math.max(1, dates.indexOf(dateFin) + 1);
+    b.nbJoursTotal = dates.length;
+    b.jour = Object.assign({ date: dateFin, horaires: '', equipeJour: '', synthese: '', aleas: '', prevuDemain: '', photos: [], envoyeLe: '' }, (c.jours && c.jours[dateFin]) || {});
+    return { bilan: b, dateFin: dateFin, dates: dates, cloture: cl };
+  }
+
+  function photosPubliquesChantier(chantier, bilan) {
+    const c = chantier || {};
+    const b = bilan || calculerBilan(c, c.jourActif);
+    const liste = [];
+    const ajouter = (photos, contexte) => {
+      (photos || []).forEach(ph => {
+        if (!ph || !ph.dataUrl || ph.visibilite === 'interne') return;
+        const clone = Object.assign({}, ph);
+        if (!valeur(clone.legende) && contexte) clone.legende = contexte;
+        liste.push(clone);
+      });
+    };
+    (c.taches || []).forEach(t => {
+      if (!t) return;
+      const machine = b.nomMachine ? b.nomMachine(t) : '';
+      const phase = b.nomPhase ? b.nomPhase(t) : '';
+      const contexte = [machine, phase, valeur(t.titre)].filter(Boolean).join(' · ');
+      ajouter(t.photos, contexte);
+    });
+    const dates = Object.keys(c.jours || {}).sort();
+    dates.forEach(d => {
+      const j = c.jours[d] || {};
+      const idx = (b.datesJours || []).indexOf(d);
+      const contexte = (idx >= 0 ? 'J' + (idx + 1) + ' · ' : '') + frDate(d);
+      ajouter(j.photos, contexte);
+    });
+    return liste;
+  }
+
+  function nomFichierPV(chantier, dateFin, ext) {
+    const c = chantier || {};
+    const d = (dateFin || dateFinaleChantier(c)).replace(/-/g, '');
+    const morceaux = [
+      'PV-Fin-Chantier-BFR', d,
+      c.affaire ? slug(c.affaire) : '',
+      slug((c.client && c.client.nom) || c.nom || 'Chantier')
+    ].filter(Boolean);
+    return morceaux.join('_') + '.' + ext;
+  }
+
   /** Recadre une image au ratio cible (cover, centré) pour un rendu Avant/Après au même format.
       Le recadrage est TOUJOURS centré (comme object-fit: cover dans l'app, ratio 1.35) :
       la zone de repère est exprimée dans cet espace recadré, donc sa position dans l'app
@@ -716,7 +820,7 @@
         const h = w * (this.logo.h / this.logo.w);
         p.image(this.logo.bytes, this.M, p.y, w, h);
         // Badge discret en haut à droite : N° d'affaire + Jour N
-        const refDroite = [valeur(c.affaire) ? 'Affaire ' + valeur(c.affaire) : '', 'Jour ' + b.numeroJour].filter(Boolean).join('  ·  ');
+        const refDroite = [valeur(c.affaire) ? 'Affaire ' + valeur(c.affaire) : '', this.opts && this.opts.pv ? 'PV FIN' : 'Jour ' + b.numeroJour].filter(Boolean).join('  ·  ');
         p.text(refDroite, this.W - this.M, p.y + h * 0.62, { size: 10, font: 'F2', color: C.navy, align: 'right' });
         p.y += h + 18;
       }
@@ -748,14 +852,17 @@
       }
       p.y = y + 18;
 
-      // Grand titre Cyan officiel BFR Systems
-      const titreDoc = 'Rapport quotidien de chantier';
+      // Grand titre Cyan officiel BFR Systems (ou PV de fin de chantier)
+      const titreDoc = this.opts && this.opts.pv ? 'Procès-verbal de fin de chantier' : 'Rapport quotidien de chantier';
       let taille = 24;
       while (taille > 16 && Pdf.measure(titreDoc, taille, true) > this.CW * 0.92) taille -= 1;
       p.text(titreDoc, this.W / 2, p.y + taille, { size: taille, font: 'F2', color: CYAN, align: 'center', bold: true });
       p.y += taille + 8;
 
-      const sousTitreDate = 'Jour ' + b.numeroJour + (b.nbJoursTotal > 1 ? ' / ' + b.nbJoursTotal : '') + ' — ' + frDate(b.dateJour);
+      const datesPVEntete = this.opts && this.opts.pvDates || b.datesJours || [];
+      const sousTitreDate = (this.opts && this.opts.pv && datesPVEntete.length)
+        ? ('Intervention du ' + frDate(datesPVEntete[0]) + ' au ' + frDate(datesPVEntete[datesPVEntete.length - 1]) + ' — J1 à J' + datesPVEntete.length)
+        : ('Jour ' + b.numeroJour + (b.nbJoursTotal > 1 ? ' / ' + b.nbJoursTotal : '') + ' — ' + frDate(b.dateJour));
       p.text(sousTitreDate, this.W / 2, p.y + 14, { size: 14.5, font: 'F2', color: CYAN, align: 'center', bold: true });
       p.y += 24;
 
@@ -791,7 +898,7 @@
       const rappel = [
         valeur(c.affaire) || valeur(c.nom) || 'Chantier',
         valeur(c.client && c.client.nom),
-        'J' + b.numeroJour + ' (' + frDate(b.dateJour) + ')'
+        (this.opts && this.opts.pv ? 'PV de fin de chantier' : 'J' + b.numeroJour + ' (' + frDate(b.dateJour) + ')')
       ].filter(Boolean).join(' — ');
 
       if (this.logo) {
@@ -1416,6 +1523,192 @@
       p.y += 8;
     }
 
+    async genererPV() {
+      const c = this.c, s = this.s, p = this.pdf;
+      const fermeture = bilanFinChantier(c, (c.cloture && c.cloture.dateFin) || '');
+      const b = fermeture.bilan, cl = fermeture.cloture;
+      this.bilan = b;
+      this.opts.pv = true;
+      this.opts.pvDates = fermeture.dates;
+
+      const logoSrc = (s.societe && s.societe.logo) || global.LOGO_BFR || '';
+      if (logoSrc) {
+        const jl = await toJpeg(logoSrc, 1250, 0.92);
+        if (jl) this.logo = { bytes: Pdf.dataUrlToBytes(jl.dataUrl), w: jl.w, h: jl.h };
+      }
+      if (c.client && c.client.logo) {
+        const jc = await toJpeg(c.client.logo, 500, 0.88);
+        if (jc) this.logoClient = { bytes: Pdf.dataUrlToBytes(jc.dataUrl), w: jc.w, h: jc.h };
+      }
+
+      this.entetePrincipale();
+      let num = 1;
+      const cli = c.client || {};
+      this.titreSection((num++) + '. Identification de l’intervention', 'Période : J1 à J' + fermeture.dates.length, 5);
+      this.kv([
+        ['Chantier / Projet', valeur(c.nom) || '—', !valeur(c.equipement)],
+        ['N° d’affaire', valeur(c.affaire)],
+        ['Client / Site', valeur(cli.nom)],
+        ['Équipement / Ligne', valeur(c.equipement)],
+        ['Machines', (b.machines || []).map(m => m.nom + (m.ref ? ' (' + m.ref + ')' : '')).join(' · ')],
+        ['Lieu d’intervention', valeur(cli.lieu) || valeur(cli.adresse)],
+        ['Période réalisée', (fermeture.dates.length ? 'Du ' + frDate(fermeture.dates[0]) + ' au ' + frDate(fermeture.dates[fermeture.dates.length - 1]) : '—') + ' — ' + fermeture.dates.length + ' jour(s) travaillé(s)'],
+        ['Contact client', [valeur(cli.contact), valeur(cli.fonction)].filter(Boolean).join(' — ')]
+      ]);
+
+      this.titreSection((num++) + '. Synthèse & avancement final', b.pctGlobal + ' %');
+      this.saut(88);
+      const yAv = p.y, hAv = 68;
+      p.rect(this.M, yAv, this.CW, hAv, { fill: [0.906, 0.969, 0.988], stroke: CYAN, lineWidth: 0.8 });
+      p.text('AVANCEMENT GLOBAL FINAL', this.M + 12, yAv + 17, { size: 9, font: 'F2', color: NAVY, bold: true });
+      p.text(b.pctGlobal + ' %', this.W - this.M - 12, yAv + 30, { size: 24, font: 'F2', color: b.pctGlobal >= 100 ? hexRgb('#15803d') : CYAN, align: 'right', bold: true });
+      p.text(b.faitTotal.length + ' tâche(s) terminée(s) sur ' + b.total, this.M + 12, yAv + 32, { size: 11, font: 'F2', color: COULEURS_PDF.texte, bold: true });
+      const bx = this.M + 12, by = yAv + 43, bw = this.CW - 24, bh = 9;
+      p.rect(bx, by, bw, bh, { fill: [0.86, 0.89, 0.92], stroke: COULEURS_PDF.bord, lineWidth: 0.3 });
+      if (b.pctGlobal > 0) p.rect(bx, by, bw * b.pctGlobal / 100, bh, { fill: b.pctGlobal >= 100 ? hexRgb('#15803d') : CYAN });
+      p.text(b.enCours.length + ' en cours  ·  ' + b.bloques.length + ' bloquée(s)  ·  ' + b.aFaire.length + ' à faire', this.M + 12, yAv + 63, { size: 8.6, color: COULEURS_PDF.gris });
+      p.y = yAv + hAv + 10;
+
+      const machinesActives = (b.parMachine || []).filter(m => m.total > 0);
+      const listeMachines = machinesActives.length ? machinesActives : [{ id: '', nom: valeur(c.equipement) || 'Intervention', taches: (c.taches || []).filter(t => t && valeur(t.titre)), total: b.total, fait: b.faitTotal.length, pct: b.pctGlobal }];
+      listeMachines.forEach(mc => {
+        this.saut(24);
+        const ym = p.y;
+        p.rect(this.M, ym, this.CW, 19, { fill: NAVY });
+        p.text(Pdf.trunc(mc.nom + ' — ' + mc.fait + '/' + mc.total + ' tâche(s) réalisée(s), ' + mc.pct + ' %', this.CW - 16, 9.1, true), this.M + 8, ym + 13, { size: 9.1, font: 'F2', color: COULEURS_PDF.blanc, bold: true });
+        p.y = ym + 23;
+        (b.parPhase || []).forEach(ph => {
+          const ts = (ph.taches || []).filter(t => !mc.id || machineIdTache(t, c) === mc.id);
+          if (!ts.length) return;
+          const fait = ts.filter(t => t.statut === 'fait').length;
+          const pTot = ts.reduce((sum, t) => sum + poidsTache(t), 0);
+          const pAcq = ts.reduce((sum, t) => sum + acquisTache(t), 0);
+          const pct = pTot ? Math.round(pAcq * 100 / pTot) : 0;
+          this.saut(20);
+          const yp = p.y;
+          p.rect(this.M, yp, this.CW, 17, { fill: [0.945, 0.955, 0.975], stroke: COULEURS_PDF.bord, lineWidth: 0.4 });
+          p.text(Pdf.trunc('  ' + ph.nom, this.CW * 0.58, 8.5, true), this.M + 7, yp + 11.7, { size: 8.5, font: 'F2', color: NAVY, bold: true });
+          p.text(fait + '/' + ts.length + ' tâches · ' + pct + ' %', this.W - this.M - 7, yp + 11.7, { size: 8.1, color: COULEURS_PDF.gris, align: 'right' });
+          p.y = yp + 19;
+        });
+      });
+      p.y += 7;
+
+      const multiMachines = (b.machines || []).length > 1;
+      const groupesTaches = (taches, preface) => {
+        const groupes = new Map();
+        (taches || []).forEach(t => {
+          const mc = multiMachines ? b.nomMachine(t) : '';
+          const ph = b.nomPhase(t);
+          const cle = mc + '\u0000' + ph;
+          if (!groupes.has(cle)) groupes.set(cle, { machine: mc, phase: ph, taches: [] });
+          groupes.get(cle).taches.push(t);
+        });
+        groupes.forEach(g => {
+          this.saut(21);
+          const yg = p.y;
+          const ent = [g.machine, g.phase].filter(Boolean).join(' · ');
+          p.rect(this.M, yg, this.CW, 16, { fill: [0.906, 0.969, 0.988], stroke: COULEURS_PDF.bord, lineWidth: 0.4 });
+          p.text(Pdf.trunc(ent, this.CW - 12, 8.3, true), this.M + 7, yg + 11, { size: 8.3, font: 'F2', color: NAVY, bold: true });
+          p.y = yg + 18;
+          g.taches.forEach(t => {
+            const statut = STATUTS[t.statut] || STATUTS.afaire;
+            const titre = valeur(t.titre) + (poidsTache(t) > 1 ? ' (x' + poidsTache(t) + ')' : '');
+            const details = valeur(t.commentaire);
+            const lTitre = Pdf.wrap(titre, this.CW - 105, 8.6, true).slice(0, 3);
+            const lDet = details ? Pdf.wrap(details, this.CW - 112, 7.8).slice(0, 2) : [];
+            const hRow = Math.max(20, 7 + lTitre.length * 10.5 + lDet.length * 9.5);
+            this.saut(hRow + 1);
+            const y = p.y;
+            p.rect(this.M, y, this.CW, hRow, { fill: [1, 1, 1], stroke: COULEURS_PDF.bord, lineWidth: 0.35 });
+            let yy = y + 11.3;
+            lTitre.forEach(l => { p.text(l, this.M + 8, yy, { size: 8.6, font: 'F2', color: COULEURS_PDF.texte, bold: true }); yy += 10.5; });
+            lDet.forEach(l => { p.text(l, this.M + 10, yy, { size: 7.8, color: COULEURS_PDF.gris }); yy += 9.5; });
+            let droite = statut.court;
+            let d = '';
+            if (t.statut === 'fait') d = frDateCourte(t.faitLe);
+            else if (t.statut === 'encours' && t.progression) droite += ' ' + t.progression + '%';
+            p.text(Pdf.trunc(droite + (d ? ' · ' + d : ''), 96, 7.6, true), this.W - this.M - 7, y + 11.2, { size: 7.6, font: 'F2', color: hexRgb(statut.couleur), align: 'right', bold: true });
+            p.y = y + hRow + 3;
+          });
+        });
+      };
+
+      if (b.faitTotal.length) {
+        this.titreSection((num++) + '. Travaux réalisés', b.faitTotal.length + ' tâche(s) terminée(s)', 10);
+        groupesTaches(b.faitTotal, 'fait');
+      } else {
+        this.titreSection((num++) + '. Travaux réalisés', 'Aucune tâche clôturée', 4);
+        this.blocTexte(null, 'Aucune tâche n’est enregistrée comme terminée à la date de clôture.');
+      }
+
+      if (b.blocagesLevesTotal.length) {
+        this.titreSection((num++) + '. Blocages levés pendant l’intervention', b.blocagesLevesTotal.length + ' levée(s)', 12);
+        b.blocagesLevesTotal.forEach(it => this.blocLeveeBlocage(it));
+      }
+
+      const restantes = (c.taches || []).filter(t => t && valeur(t.titre) && t.statut !== 'fait');
+      if (restantes.length) {
+        this.titreSection((num++) + '. Tâches restant à terminer / réserves', restantes.length + ' point(s)', 10);
+        groupesTaches(restantes, 'reste');
+      }
+      if (cl.reserves) this.blocTexte('Réserves exprimées par le client', cl.reserves, hexRgb('#b45309'), [1, 0.985, 0.94]);
+      if (cl.commentaireFinal) this.blocTexte('Commentaire de fin d’intervention', cl.commentaireFinal, CYAN, [0.975, 0.99, 1]);
+
+      const photosPV = photosPubliquesChantier(c, b);
+      if (photosPV.length) {
+        this.titreSection((num++) + '. Photos de l’intervention', photosPV.length + ' photo(s) client · Avant / Après inclus', 175);
+        await this.photos(photosPV, true, '');
+      }
+
+      this.titreSection((num++) + '. Réception & signatures', cl.receptionOk ? 'Réception confirmée' : 'À confirmer', 165);
+      this.blocTexte('Bon pour réception', cl.receptionOk
+        ? 'Le client confirme la réception des travaux décrits dans ce procès-verbal, avec les éventuelles réserves détaillées ci-dessus.'
+        : 'La réception des travaux n’a pas été confirmée.', hexRgb('#15803d'), [0.94, 0.99, 0.95]);
+      this.saut(148);
+      const ySig = p.y, hSig = 126, gapSig = 10, wSig = (this.CW - gapSig) / 2;
+      const fichesSig = [
+        { x: this.M, titre: 'CLIENT / RÉCEPTION', nom: [cl.signatureClient.nom, cl.signatureClient.fonction].filter(Boolean).join(' — '), sig: cl.signatureClient, coul: hexRgb('#15803d') },
+        { x: this.M + wSig + gapSig, titre: 'TECHNICIEN BFR SYSTEMS', nom: [cl.signatureTech.nom, cl.signatureTech.fonction || roleTechnicien(c, s)].filter(Boolean).join(' — '), sig: cl.signatureTech, coul: NAVY }
+      ];
+      for (const fSig of fichesSig) {
+        p.rect(fSig.x, ySig, wSig, hSig, { fill: [1, 1, 1], stroke: COULEURS_PDF.bord, lineWidth: 0.7 });
+        p.rect(fSig.x, ySig, wSig, 20, { fill: fSig.coul });
+        p.text(fSig.titre, fSig.x + 8, ySig + 13.5, { size: 8.1, font: 'F2', color: COULEURS_PDF.blanc, bold: true });
+        p.text(Pdf.trunc(fSig.nom || 'Nom non renseigné', wSig - 14, 8.2, true), fSig.x + 8, ySig + 34, { size: 8.2, font: 'F2', color: COULEURS_PDF.texte, bold: true });
+        const boxX = fSig.x + 8, boxY = ySig + 42, boxW = wSig - 16, boxH = 57;
+        p.rect(boxX, boxY, boxW, boxH, { fill: [0.99, 0.995, 1], stroke: COULEURS_PDF.bord, lineWidth: 0.5 });
+        if (fSig.sig && fSig.sig.dataUrl) {
+          const js = await toJpeg(fSig.sig.dataUrl, 700, 0.9);
+          if (js) {
+            const iw = boxW - 8, ih = boxH - 6;
+            const ratio = js.w / js.h;
+            const dw = Math.min(iw, ih * ratio), dh = dw / ratio;
+            p.image(Pdf.dataUrlToBytes(js.dataUrl), boxX + (boxW - dw) / 2, boxY + (boxH - dh) / 2, dw, dh);
+          }
+        } else {
+          p.text('Signature', boxX + boxW / 2, boxY + 31, { size: 9, color: COULEURS_PDF.gris, align: 'center' });
+        }
+        const dateSig = frDateHeure(fSig.sig && fSig.sig.dateHeure) || frDateHeure(cl.clotureLe) || '';
+        p.text(Pdf.trunc(dateSig ? 'Signé le ' + dateSig : 'Date : ' + frDate(fermeture.dateFin), wSig - 14, 7.2), fSig.x + 8, ySig + 114, { size: 7.2, color: COULEURS_PDF.gris });
+      }
+      p.y = ySig + hSig + 10;
+
+      const sieges = lignesPiedPage(s);
+      p.addFooters(function (d, nPage, total) {
+        const y = d.H - 20;
+        d.line(d.margin, y - 26, d.W - d.margin, y - 26, { color: COULEURS_PDF.bord, width: 0.6 });
+        const largeur = d.W - 2 * d.margin - 80;
+        sieges.forEach(function (ligne, k) {
+          d.text(Pdf.trunc(ligne, largeur, k === 0 ? 8.2 : 7.4, k === 0), d.margin, y - 16 + k * 9.2,
+            { size: k === 0 ? 8.2 : 7.4, font: k === 0 ? 'F2' : 'F1', color: COULEURS_PDF.gris, bold: k === 0 });
+        });
+        d.text('Page ' + nPage + ' / ' + total, d.W - d.margin, y - 8, { size: 8, font: 'F2', color: COULEURS_PDF.gris, align: 'right', bold: true });
+      });
+
+      return { blob: p.blob(), filename: nomFichierPV(c, fermeture.dateFin, 'pdf'), bilan: b, dates: fermeture.dates };
+    }
+
     async generer() {
       const c = this.c, s = this.s, b = this.bilan, p = this.pdf;
 
@@ -1731,6 +2024,216 @@
     return { blob: doc.blob(), filename: nomFichier(c, b, 'docx'), bilan: b };
   }
 
+  async function genererWordPV(chantier, reglages) {
+    const c = chantier || {}, s = reglages || {};
+    const fermeture = bilanFinChantier(c, (c.cloture && c.cloture.dateFin) || '');
+    const b = fermeture.bilan, cl = fermeture.cloture, cli = c.client || {};
+    const doc = new Docx.Doc({ auteur: (s.societe && s.societe.nom) || 'BFR SYSTEMS', pied: lignesPiedPage(s) });
+    const logoSrc = (s.societe && s.societe.logo) || global.LOGO_BFR || '';
+    if (logoSrc) {
+      const jl = await toJpeg(logoSrc, 1250, 0.92);
+      if (jl) doc.logoEntete(jl.dataUrl);
+    }
+
+    doc.titreDoc = 'PV de fin de chantier — ' + (valeur(c.nom) || 'Chantier') + ' — ' + frDate(fermeture.dateFin);
+    if (valeur(cli.nom)) doc.para(cli.nom, { font: 'Poppins', gras: true, taille: 13, couleur: '332E72', apres: 30 });
+    if (valeur(cli.lieu) || valeur(cli.adresse)) doc.para(valeur(cli.lieu) || valeur(cli.adresse), { taille: 10, couleur: '64748B', apres: 100 });
+    doc.grandTitre('Procès-verbal de fin de chantier', 24);
+    doc.para('Intervention du ' + frDate(fermeture.dates[0]) + ' au ' + frDate(fermeture.dates[fermeture.dates.length - 1]) + ' — J1 à J' + fermeture.dates.length,
+      { font: 'Poppins', gras: true, taille: 13.5, couleur: '06BAF2', align: 'center', apres: 60 });
+    if (valeur(c.nom)) doc.para(valeur(c.nom) + (valeur(c.affaire) ? ' (' + valeur(c.affaire) + ')' : ''),
+      { font: 'Poppins', gras: true, taille: 12, couleur: '332E72', align: 'center', apres: 130 });
+    const techNom = nomTechnicien(c, s), roleTech = roleTechnicien(c, s);
+    doc.para([
+      { t: 'Technicien BFR Systems : ', gras: true, couleur: '332E72' },
+      { t: techNom + (roleTech ? ' — ' + roleTech : '') }
+    ], { encadre: true, apres: 110 });
+
+    doc.bandeau('1. IDENTIFICATION DE L’INTERVENTION', '06BAF2');
+    doc.tableau([
+      [{ texte: 'Client', gras: true, fond: 'EAF8FD' }, { texte: valeur(cli.nom) || '—' }, { texte: 'Affaire', gras: true, fond: 'EAF8FD' }, { texte: valeur(c.affaire) || '—' }],
+      [{ texte: 'Équipement / Ligne', gras: true, fond: 'EAF8FD' }, { texte: valeur(c.equipement) || '—' }, { texte: 'Lieu', gras: true, fond: 'EAF8FD' }, { texte: valeur(cli.lieu) || valeur(cli.adresse) || '—' }],
+      [{ texte: 'Machines', gras: true, fond: 'EAF8FD' }, { texte: (b.machines || []).map(m => m.nom + (m.ref ? ' (' + m.ref + ')' : '')).join(' · ') || '—' }, { texte: 'Durée', gras: true, fond: 'EAF8FD' }, { texte: fermeture.dates.length + ' jour(s) travaillé(s)' }]
+    ], { largeurs: [21, 31, 18, 30] });
+
+    doc.bandeau('2. SYNTHÈSE & AVANCEMENT FINAL', '06BAF2', b.pctGlobal + ' %');
+    doc.tableau([
+      [
+        { texte: 'Avancement final', gras: true, align: 'center', couleur: '0369A1', fond: 'E0F2FE' },
+        { texte: 'Tâches terminées', gras: true, align: 'center', couleur: '15803D', fond: 'DCFCE7' },
+        { texte: 'En cours', gras: true, align: 'center', couleur: 'B45309', fond: 'FEF3C7' },
+        { texte: 'Bloquées', gras: true, align: 'center', couleur: 'B91C1C', fond: 'FEE2E2' }
+      ],
+      [
+        { texte: b.pctGlobal + ' %', gras: true, taille: 15, align: 'center', couleur: '0369A1' },
+        { texte: b.faitTotal.length + ' / ' + b.total, gras: true, taille: 13, align: 'center', couleur: '15803D' },
+        { texte: String(b.enCours.length), gras: true, taille: 13, align: 'center', couleur: 'B45309' },
+        { texte: String(b.bloques.length), gras: true, taille: 13, align: 'center', couleur: b.bloques.length ? 'B91C1C' : '64748B' }
+      ]
+    ], { largeurs: [25, 25, 25, 25] });
+
+    const lignesMachines = [[
+      { texte: 'Machine', gras: true, couleur: '332E72', fond: 'EAF8FD' },
+      { texte: 'Tâches terminées', gras: true, align: 'center', couleur: '332E72', fond: 'EAF8FD' },
+      { texte: 'Avancement', gras: true, align: 'center', couleur: '332E72', fond: 'EAF8FD' }
+    ]];
+    (b.parMachine || []).filter(m => m.total > 0).forEach(m => lignesMachines.push([
+      { texte: m.nom + (m.ref ? ' (' + m.ref + ')' : '') },
+      { texte: m.fait + ' / ' + m.total, align: 'center' },
+      { texte: m.pct + ' %', gras: true, align: 'center', couleur: m.pct >= 100 ? '15803D' : '0369A1' }
+    ]));
+    if (lignesMachines.length > 1) doc.tableau(lignesMachines, { largeurs: [52, 24, 24] });
+
+    const lignesPhases = [[
+      { texte: 'Phase / Lot', gras: true, couleur: '332E72', fond: 'EAF8FD' },
+      { texte: 'Terminées / total', gras: true, align: 'center', couleur: '332E72', fond: 'EAF8FD' },
+      { texte: 'Avancement', gras: true, align: 'center', couleur: '332E72', fond: 'EAF8FD' }
+    ]];
+    (b.parPhase || []).filter(ph => ph.total > 0).forEach(ph => lignesPhases.push([
+      { texte: ph.nom }, { texte: ph.fait + ' / ' + ph.total, align: 'center' }, { texte: ph.pct + ' %', gras: true, align: 'center' }
+    ]));
+    if (lignesPhases.length > 1) doc.tableau(lignesPhases, { largeurs: [52, 24, 24] });
+
+    const lignesChecklist = [[
+      { texte: (b.machines || []).length > 1 ? 'Machine' : 'Phase / Lot', gras: true, couleur: '332E72', fond: 'EAF8FD' },
+      { texte: (b.machines || []).length > 1 ? 'Phase / Lot' : 'Tâche / Opération', gras: true, couleur: '332E72', fond: 'EAF8FD' },
+      { texte: (b.machines || []).length > 1 ? 'Tâche' : 'Statut', gras: true, couleur: '332E72', fond: 'EAF8FD' },
+      { texte: (b.machines || []).length > 1 ? 'Statut' : 'Date', gras: true, align: 'center', couleur: '332E72', fond: 'EAF8FD' },
+      ...( (b.machines || []).length > 1 ? [{ texte: 'Date', gras: true, align: 'center', couleur: '332E72', fond: 'EAF8FD' }] : [] )
+    ]];
+    const multiMc = (b.machines || []).length > 1;
+    (c.taches || []).filter(t => t && valeur(t.titre)).forEach(t => {
+      const ph = b.nomPhase(t), mc = b.nomMachine(t), st = STATUTS[t.statut] || STATUTS.afaire;
+      const d = t.statut === 'fait' ? frDate(t.faitLe) : (t.statut === 'encours' && t.progression ? t.progression + ' %' : '—');
+      lignesChecklist.push(multiMc
+        ? [{ texte: mc }, { texte: ph }, { texte: valeur(t.titre) }, { texte: st.libelle, gras: true, couleur: st.couleur.replace('#', '').toUpperCase() }, { texte: d, align: 'center' }]
+        : [{ texte: ph }, { texte: valeur(t.titre) }, { texte: st.libelle, gras: true, couleur: st.couleur.replace('#', '').toUpperCase() }, { texte: d, align: 'center' }]);
+    });
+    doc.bandeau('3. ÉTAT RÉCAPITULATIF DES TÂCHES', '06BAF2', b.total + ' tâche(s)');
+    if (lignesChecklist.length > 1) doc.tableau(lignesChecklist, { largeurs: multiMc ? [20, 20, 34, 13, 13] : [25, 50, 13, 12] });
+    else doc.para('Aucune tâche n’est enregistrée dans la checklist.', { italique: true, couleur: '64748B' });
+
+    if (b.blocagesLevesTotal.length) {
+      doc.bandeau('4. BLOCAGES LEVÉS PENDANT L’INTERVENTION', '06BAF2', b.blocagesLevesTotal.length + ' levée(s)');
+      b.blocagesLevesTotal.forEach(it => {
+        const orig = ORIGINES_BLOCAGE[it.hist.origine || 'CLIENT'] || ORIGINES_BLOCAGE.CLIENT;
+        const det = [
+          it.hist.debutLe ? 'Bloqué le ' + frDate(it.hist.debutLe) : '',
+          it.hist.leveLe ? 'levé le ' + frDate(it.hist.leveLe) : '',
+          valeur(it.hist.duree) ? 'durée : ' + valeur(it.hist.duree) : '',
+          valeur(it.hist.motif) ? 'motif : ' + valeur(it.hist.motif) : '',
+          valeur(it.hist.noteLevee) ? 'résolution : ' + valeur(it.hist.noteLevee) : ''
+        ].filter(Boolean).join(' · ');
+        doc.para([
+          { t: '• [' + orig.libelle + (it.machineNom ? ' — ' + it.machineNom : '') + ' / ' + it.phaseNom + '] ', gras: true, couleur: '15803D' },
+          { t: it.tache.titre, gras: true }
+        ], { apres: 20 });
+        if (det) doc.para(det, { couleur: '475569', apres: 70 });
+      });
+    }
+
+    const restantes = (c.taches || []).filter(t => t && valeur(t.titre) && t.statut !== 'fait');
+    if (restantes.length || cl.reserves || cl.commentaireFinal) {
+      doc.bandeau('5. RÉSERVES & COMMENTAIRES DE FIN', '06BAF2', restantes.length + ' tâche(s) non terminée(s)');
+      if (restantes.length) {
+        doc.para('Tâches restant à terminer / points ouverts :', { font: 'Poppins', gras: true, taille: 10, couleur: '332E72', apres: 40 });
+        restantes.forEach(t => {
+          const st = STATUTS[t.statut] || STATUTS.afaire;
+          const pref = multiMc ? '[' + b.nomMachine(t) + ' · ' + b.nomPhase(t) + '] ' : '[' + b.nomPhase(t) + '] ';
+          doc.para([{ t: '• ' + pref, gras: true, couleur: 'B45309' }, { t: t.titre + ' — ' + st.libelle, gras: true }], { apres: 25 });
+          if (valeur(t.commentaire) || valeur(t.blocage)) doc.para([valeur(t.commentaire), valeur(t.blocage)].filter(Boolean).join(' — '), { couleur: '64748B', apres: 60 });
+        });
+      } else doc.para('Aucune tâche ne reste ouverte dans la checklist.', { italique: true, couleur: '15803D', apres: 60 });
+      if (cl.reserves) {
+        doc.para('Réserves exprimées par le client :', { font: 'Poppins', gras: true, taille: 10, couleur: '332E72', avant: 80, apres: 35 });
+        doc.para(cl.reserves, { encadre: true, apres: 80 });
+      }
+      if (cl.commentaireFinal) {
+        doc.para('Commentaire de fin d’intervention :', { font: 'Poppins', gras: true, taille: 10, couleur: '332E72', avant: 80, apres: 35 });
+        doc.para(cl.commentaireFinal, { apres: 100 });
+      }
+    } else {
+      doc.bandeau('5. RÉSERVES & COMMENTAIRES DE FIN', '06BAF2', 'Aucune réserve saisie');
+      doc.para('Aucune tâche restante ni réserve client enregistrée.', { italique: true, couleur: '15803D' });
+    }
+
+    const photosPV = photosPubliquesChantier(c, b);
+    if (photosPV.length) {
+      doc.bandeau('6. PHOTOS DE L’INTERVENTION', '06BAF2', photosPV.length + ' photo(s) client · Avant / Après inclus');
+      const groupes = grouperPhotosPourRapport(photosPV, false);
+      for (const g of groupes) {
+        if (g.type === 'paire') {
+          const zones = zonesSeparées(g);
+          const ja = await toJpegRecadreZone(g.avant.dataUrl, 1.35, zones.avant, 900, 0.86);
+          const jp = await toJpegRecadreZone(g.apres.dataUrl, 1.35, zones.apres, 900, 0.86);
+          doc.para('Comparatif AVANT / APRÈS' + (g.legende ? ' — ' + g.legende : ''), { font: 'Poppins', gras: true, taille: 10, couleur: '332E72', avant: 80, apres: 35 });
+          if (ja && jp) {
+            doc.tableau([[
+              { image: ja.dataUrl, imageCm: 7.2, align: 'center', legende: 'AVANT' + (datePhotoFr(g.avant) ? ' — ' + datePhotoFr(g.avant) : '') },
+              { image: jp.dataUrl, imageCm: 7.2, align: 'center', legende: 'APRÈS' + (datePhotoFr(g.apres) ? ' — ' + datePhotoFr(g.apres) : '') }
+            ]], { largeurs: [50, 50], sansBordures: true });
+          } else {
+            if (ja) doc.image(ja.dataUrl, 10, { legende: 'AVANT' });
+            if (jp) doc.image(jp.dataUrl, 10, { legende: 'APRÈS' });
+          }
+          const chg = changmentPaire(g);
+          if (chg) doc.para([{ t: 'Changement : ', gras: true, couleur: '332E72' }, { t: chg }], { avant: 30, apres: 100 });
+        } else {
+          const j = await toJpeg(g.photo.dataUrl, 1000, 0.84);
+          if (j) doc.image(j.dataUrl, 12, { legende: (g.etiquette ? '[' + g.etiquette + '] ' : '') + (g.photo.legende || '') });
+        }
+      }
+    }
+
+    doc.bandeau('7. RÉCEPTION & SIGNATURES', '06BAF2', cl.receptionOk ? 'Réception confirmée' : 'À confirmer');
+    doc.para([
+      { t: cl.receptionOk ? '☒ Bon pour réception : ' : '☐ Bon pour réception : ', gras: true, couleur: cl.receptionOk ? '15803D' : 'B91C1C' },
+      { t: 'le client confirme la réception des travaux décrits dans ce procès-verbal, avec les éventuelles réserves détaillées ci-dessus.' }
+    ], { encadre: true, apres: 120 });
+    const sigC = cl.signatureClient || {}, sigT = cl.signatureTech || {};
+    const signatureCell = (sig, label, role) => {
+      if (sig && sig.dataUrl) return { image: sig.dataUrl, imageCm: 6.5, align: 'center', legende: label + (frDateHeure(sig.dateHeure) ? ' — signé le ' + frDateHeure(sig.dateHeure) : '') };
+      return { texte: label + '\nSignature manquante', align: 'center', couleur: 'B91C1C' };
+    };
+    doc.tableau([
+      [{ texte: 'CLIENT / RÉCEPTION', gras: true, align: 'center', couleur: 'FFFFFF', fond: '15803D' }, { texte: 'TECHNICIEN BFR SYSTEMS', gras: true, align: 'center', couleur: 'FFFFFF', fond: '332E72' }],
+      [
+        { texte: [sigC.nom || 'Nom client non renseigné', sigC.fonction || ''].filter(Boolean).join(' — '), gras: true, align: 'center' },
+        { texte: [sigT.nom || techNom, sigT.fonction || roleTech].filter(Boolean).join(' — '), gras: true, align: 'center' }
+      ],
+      [signatureCell(sigC, 'Signature client'), signatureCell(sigT, 'Signature technicien')]
+    ], { largeurs: [50, 50] });
+    doc.para('PV établi le ' + (frDateHeure(cl.clotureLe) || frDate(fermeture.dateFin)) + '.', { taille: 9, couleur: '64748B', align: 'right', avant: 80 });
+
+    return { blob: doc.blob(), filename: nomFichierPV(c, fermeture.dateFin, 'docx'), bilan: b, dates: fermeture.dates };
+  }
+
+  function objetMailPV(chantier, reglages) {
+    const c = chantier || {};
+    const fermeture = bilanFinChantier(c);
+    const nomProjet = [valeur(c.affaire), valeur(c.nom), valeur(c.client && c.client.nom)].filter(Boolean).slice(0, 2).join(' - ') || 'Chantier BFR';
+    return '[BFR Systems] PV de fin de chantier — ' + nomProjet + ' — ' + frDate(fermeture.dateFin);
+  }
+
+  function corpsMailPV(chantier, reglages) {
+    const c = chantier || {}, s = reglages || {};
+    const fermeture = bilanFinChantier(c), b = fermeture.bilan, cl = fermeture.cloture;
+    const lignes = [
+      'Bonjour,', '',
+      'Veuillez trouver ci-joint le procès-verbal de fin de chantier signé.',
+      'Chantier : ' + (valeur(c.nom) || '—') + (valeur(c.affaire) ? ' (Affaire ' + valeur(c.affaire) + ')' : ''),
+      'Client / Site : ' + (valeur(c.client && c.client.nom) || '—'),
+      'Période : ' + frDate(fermeture.dates[0]) + ' au ' + frDate(fermeture.dates[fermeture.dates.length - 1]) + ' — J1 à J' + fermeture.dates.length,
+      'Avancement final : ' + b.pctGlobal + ' % (' + b.faitTotal.length + ' / ' + b.total + ' tâches terminées)',
+      'Machines : ' + ((b.machines || []).map(m => m.nom).join(' · ') || '—'),
+      'Réception client : ' + (cl.receptionOk ? 'confirmée' : 'non confirmée')
+    ];
+    if (cl.reserves) lignes.push('', 'Réserves :', cl.reserves);
+    if (cl.commentaireFinal) lignes.push('', 'Commentaire final :', cl.commentaireFinal);
+    lignes.push('', 'Cordialement,', nomTechnicien(c, s), (roleTechnicien(c, s) ? roleTechnicien(c, s) + ' — ' : '') + 'BFR SYSTEMS');
+    return lignes.join('\n');
+  }
+
   function nomFichier(chantier, bilan, ext) {
     const d = (bilan.dateJour || '').replace(/-/g, '');
     const morceaux = [
@@ -1877,6 +2380,15 @@
     estJourVide: estJourVide,
     datesJoursTriees: datesJoursTriees,
     calculerBilan: calculerBilan,
+    dateFinaleChantier: dateFinaleChantier,
+    bilanFinChantier: bilanFinChantier,
+    genererPDFPV: function (chantier, reglages) {
+      const c = chantier || {};
+      return new RapportQuotidienPDF(c, reglages || {}, dateFinaleChantier(c), { pv: true }).genererPV();
+    },
+    genererWordPV: genererWordPV,
+    objetMailPV: objetMailPV,
+    corpsMailPV: corpsMailPV,
     genererPDF: function (chantier, reglages, dateJour) {
       return new RapportQuotidienPDF(chantier, reglages, dateJour, { apercu: false }).generer();
     },

@@ -4090,3 +4090,26 @@ body.mode-rsav .actionbar #btnAjouterPiece { flex: 1 1 100%; }
   color: var(--bfr-text);
   text-align: center;
 }
+
+
+/* Signature tactile du PV de fin de chantier */
+.pv-signature-card {
+  padding: 10px;
+  margin: 9px 0;
+  border: 1px solid var(--bfr-border);
+  border-radius: 12px;
+  background: #fff;
+}
+.pv-signature-card h2 { font-size: 14px; }
+.pv-signature-canvas {
+  display: block;
+  width: 100%;
+  height: 132px;
+  margin-top: 8px;
+  border: 1.5px dashed #94a3b8;
+  border-radius: 9px;
+  background: #fff;
+  touch-action: none;
+  cursor: crosshair;
+}
+.pv-signature-canvas:active { border-color: var(--bfr-primary); }

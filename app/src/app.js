@@ -1785,7 +1785,278 @@
         </div>
         <button type="button" class="btn sm ghost" data-a="editer-destinataires" style="min-height:28px;padding:3px 9px;font-size:11.5px;flex-shrink:0">Gérer</button>
       </div>
+      </div>
+
+      <div class="card" id="cartePVFin" style="border:1.5px solid var(--bfr-primary);background:linear-gradient(135deg,#ffffff 0%,#f2fbfe 100%)">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">
+          <h2 style="margin:0;display:flex;align-items:center;gap:7px">${ICO.fileText(18, 'ico-cyan')} PV de fin de chantier</h2>
+          ${C.cloture && C.cloture.signatureClient && C.cloture.signatureClient.dataUrl && C.cloture.signatureTech && C.cloture.signatureTech.dataUrl && C.cloture.receptionOk
+            ? `<span class="pill ok">✓ Signé · ${esc(Report.frDate((C.cloture.dateFin || '').slice(0, 10)))}</span>`
+            : `<span class="pill">À compléter et signer</span>`}
+        </div>
+        <p class="hint" style="margin:7px 0 10px">Bilan automatique de l’intervention, checklist par machine et phase, blocages levés, photos Avant / Après, réserves éventuelles et réception signée par le client et le technicien BFR.</p>
+        <button type="button" class="btn principal wide" data-a="pv-fin">${ICO.fileText(18)} Préparer le PV de fin de chantier</button>
+      </div>`;
+  }
+
+  function feuillePV() {
+    const draft = C.cloture || {};
+    const sigC0 = draft.signatureClient || {};
+    const sigT0 = draft.signatureTech || {};
+    const dateDefaut = draft.dateFin || Report.dateFinaleChantier(C);
+    const techNomDefaut = sigT0.nom || Report.nomTechnicien(C, S);
+    const techRoleDefaut = sigT0.fonction || Report.roleTechnicien(C, S);
+    const bilanPV = Report.bilanFinChantier(C, dateDefaut).bilan;
+    const nbOuvertes = (C.taches || []).filter(t => t && t.titre && t.statut !== 'fait').length;
+
+    const html = `<div class="panel" style="max-height:94vh">
+      <div class="grab"></div>
+      <h3 style="margin:0 0 6px">PV de fin de chantier</h3>
+      <p class="sub">Bilan automatique : <strong>${bilanPV.pctGlobal} %</strong> · ${bilanPV.faitTotal.length}/${bilanPV.total} tâches terminées · ${nbOuvertes} point(s) restant(s). Le document inclut les machines, phases, blocages levés et photos visibles par le client.</p>
+      <div class="card" style="background:#f7fbff;padding:10px;margin-bottom:10px">
+        <div class="grid2">
+          <div class="field"><label>Date de fin / réception</label><input type="date" data-pv="dateFin" value="${esc(dateDefaut)}"></div>
+          <div class="field"><label>Technicien BFR signataire</label><input type="text" data-pv="techNom" value="${esc(techNomDefaut)}" placeholder="Prénom NOM"></div>
+        </div>
+        <div class="field"><label>Fonction</label><input type="text" data-pv="techFonction" value="${esc(techRoleDefaut)}" placeholder="Metteur au point, Automaticien…"></div>
+      </div>
+
+      <div class="card" style="padding:10px;margin-bottom:10px">
+        <h2 style="margin:0 0 8px">Client &amp; réception</h2>
+        <div class="grid2">
+          <div class="field"><label>Nom et prénom du client *</label><input type="text" data-pv="clientNom" value="${esc(sigC0.nom || (C.client && C.client.contact) || '')}" placeholder="Nom du signataire client"></div>
+          <div class="field"><label>Fonction du client *</label><input type="text" data-pv="clientFonction" value="${esc(sigC0.fonction || (C.client && C.client.fonction) || '')}" placeholder="Ex. Responsable maintenance"></div>
+        </div>
+        <label class="checkline" style="display:flex;align-items:flex-start;gap:9px;padding:10px;border:1px solid var(--bfr-border);border-radius:10px;background:#f8fafc;line-height:1.4">
+          <input type="checkbox" data-pv="reception"${draft.receptionOk === true ? ' checked' : ''} style="width:20px;height:20px;flex:0 0 auto;margin-top:1px">
+          <span><strong>Bon pour réception</strong> — le client confirme la réception des travaux décrits dans le PV ; les réserves éventuelles sont détaillées ci-dessous.</span>
+        </label>
+        <div class="field" style="margin-top:9px"><label>Réserves éventuelles du client</label><textarea data-pv="reserves" rows="3" placeholder="Décrire les réserves, action attendue et délai convenu…">${esc(draft.reserves || '')}</textarea></div>
+      </div>
+
+      <div class="field"><label>Commentaire de fin d’intervention</label><textarea data-pv="commentaire" rows="3" placeholder="Résumé libre, essais réalisés, recommandations, prochaines étapes…">${esc(draft.commentaireFinal || '')}</textarea></div>
+
+      <div class="card pv-signature-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <div><h2 style="margin:0">Signature du client *</h2><small>${esc(sigC0.nom || 'Nom du signataire à renseigner')}</small></div>
+          <button type="button" class="btn sm ghost" data-pv-clear="client">Effacer</button>
+        </div>
+        <canvas class="pv-signature-canvas" data-pv-signature="client" aria-label="Signature du client"></canvas>
+        <small class="hint">Signer au doigt ou au stylet dans la zone.</small>
+      </div>
+
+      <div class="card pv-signature-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <div><h2 style="margin:0">Signature du technicien BFR *</h2><small>${esc(techNomDefaut + (techRoleDefaut ? ' — ' + techRoleDefaut : ''))}</small></div>
+          <button type="button" class="btn sm ghost" data-pv-clear="tech">Effacer</button>
+        </div>
+        <canvas class="pv-signature-canvas" data-pv-signature="tech" aria-label="Signature du technicien BFR"></canvas>
+        <small class="hint">Attestation de fin d’intervention par le technicien BFR.</small>
+      </div>
+
+      <div class="btnrow" style="margin-top:10px">
+        <button type="button" class="btn grey" data-a="fermer">Annuler</button>
+        <button type="button" class="btn ghost" data-pv-action="draft">Enregistrer le brouillon</button>
+        <button type="button" class="btn principal" data-pv-action="generate">Générer le PV signé</button>
+      </div>
+      <p class="hint" style="margin:8px 0 0">Le PV final sera disponible en PDF et Word. L’envoi par e-mail peut joindre les deux fichiers si votre appareil le permet. La signature dessinée est reproduite et horodatée dans le PV ; elle ne constitue pas une signature électronique qualifiée.</p>
     </div>`;
+
+    Ouvrir.ouvrir(html, (panneau, overlay) => {
+      const canvases = {};
+      const initCanvas = (canvas, signature) => {
+        const ctx = canvas.getContext('2d');
+        canvas.dataset.signed = signature && signature.dataUrl ? '1' : '0';
+        canvas.dataset.modified = '0';
+        canvas.dataset.savedData = (signature && signature.dataUrl) || '';
+        const setup = () => {
+          const rect = canvas.getBoundingClientRect();
+          if (!rect.width || !rect.height) return;
+          const ratio = Math.max(1, window.devicePixelRatio || 1);
+          canvas.width = Math.round(rect.width * ratio);
+          canvas.height = Math.round(rect.height * ratio);
+          ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+          ctx.clearRect(0, 0, rect.width, rect.height);
+          ctx.lineWidth = 2.5;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.strokeStyle = '#1f2937';
+          if (canvas.dataset.savedData) {
+            const img = new Image();
+            img.onload = () => ctx.drawImage(img, 0, 0, rect.width, rect.height);
+            img.src = canvas.dataset.savedData;
+          }
+        };
+        requestAnimationFrame(setup);
+        let drawing = false;
+        const pos = e => {
+          const r = canvas.getBoundingClientRect();
+          return { x: e.clientX - r.left, y: e.clientY - r.top };
+        };
+        canvas.addEventListener('pointerdown', e => {
+          e.preventDefault();
+          try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+          drawing = true;
+          canvas.dataset.signed = '1';
+          canvas.dataset.modified = '1';
+          const pt = pos(e);
+          ctx.beginPath(); ctx.moveTo(pt.x, pt.y); ctx.lineTo(pt.x + 0.01, pt.y + 0.01); ctx.stroke();
+        });
+        canvas.addEventListener('pointermove', e => {
+          if (!drawing) return;
+          e.preventDefault();
+          const pt = pos(e);
+          ctx.lineTo(pt.x, pt.y); ctx.stroke();
+        });
+        const fin = () => { drawing = false; };
+        canvas.addEventListener('pointerup', fin);
+        canvas.addEventListener('pointercancel', fin);
+        canvas.addEventListener('lostpointercapture', fin);
+        canvases[canvas.dataset.pvSignature] = canvas;
+      };
+      $$('[data-pv-signature]', panneau).forEach(canvas => {
+        initCanvas(canvas, canvas.dataset.pvSignature === 'client' ? sigC0 : sigT0);
+      });
+
+      const collecter = final => {
+        const now = new Date().toISOString();
+        const lireSig = (cle, ancienne, nom, fonction) => {
+          const cv = canvases[cle];
+          const modifiee = cv && cv.dataset.modified === '1';
+          const signee = cv && cv.dataset.signed === '1';
+          let dataUrl = '';
+          if (modifiee) dataUrl = signee ? cv.toDataURL('image/png') : '';
+          else dataUrl = (ancienne && ancienne.dataUrl) || '';
+          let dateHeure = ancienne && ancienne.dateHeure || '';
+          if (modifiee) dateHeure = signee ? now : '';
+          else if (signee && !dateHeure) dateHeure = now;
+          return { nom, fonction, dataUrl, dateHeure };
+        };
+        const clientNom = ($('[data-pv="clientNom"]', panneau).value || '').trim();
+        const clientFonction = ($('[data-pv="clientFonction"]', panneau).value || '').trim();
+        const techNom = ($('[data-pv="techNom"]', panneau).value || '').trim();
+        const techFonction = ($('[data-pv="techFonction"]', panneau).value || '').trim();
+        return {
+          dateFin: ($('[data-pv="dateFin"]', panneau).value || '').trim(),
+          commentaireFinal: ($('[data-pv="commentaire"]', panneau).value || '').trim(),
+          reserves: ($('[data-pv="reserves"]', panneau).value || '').trim(),
+          receptionOk: !!$('[data-pv="reception"]', panneau).checked,
+          signatureClient: lireSig('client', sigC0, clientNom, clientFonction),
+          signatureTech: lireSig('tech', sigT0, techNom, techFonction),
+          clotureLe: final ? now : (draft.clotureLe || '')
+        };
+      };
+
+      panneau.addEventListener('click', async e => {
+        const clear = e.target.closest('[data-pv-clear]');
+        if (clear) {
+          const cv = canvases[clear.dataset.pvClear];
+          if (cv) {
+            const ctx = cv.getContext('2d');
+            const r = cv.getBoundingClientRect();
+            ctx.clearRect(0, 0, r.width, r.height);
+            cv.dataset.signed = '0';
+            cv.dataset.modified = '1';
+            cv.dataset.savedData = '';
+          }
+          return;
+        }
+        const action = e.target.closest('[data-pv-action]');
+        if (!action) return;
+        const pv = collecter(action.dataset.pvAction === 'generate');
+        if (!pv.dateFin) { toast('Choisis la date de fin du chantier'); return; }
+        if (C.dateDebut && pv.dateFin < C.dateDebut) { toast('La date de fin ne peut pas précéder le début du chantier'); return; }
+        if (action.dataset.pvAction === 'draft') {
+          C.cloture = Object.assign({}, C.cloture || {}, pv);
+          planifierSauvegarde();
+          toast('Brouillon du PV enregistré');
+          return;
+        }
+        if (!pv.receptionOk) { toast('Coche la confirmation de réception du client'); return; }
+        if (!pv.signatureClient.nom || !pv.signatureClient.fonction) { toast('Renseigne le nom et la fonction du signataire client'); return; }
+        if (!pv.signatureClient.dataUrl) { toast('La signature du client est nécessaire'); return; }
+        if (!pv.signatureTech.nom) { toast('Renseigne le nom du technicien BFR'); return; }
+        if (!pv.signatureTech.dataUrl) { toast('La signature du technicien BFR est nécessaire'); return; }
+        C.cloture = pv;
+        planifierSauvegarde();
+        action.disabled = true;
+        action.textContent = 'Génération du PV BFR…';
+        try {
+          const pdfRes = await Report.genererPDFPV(C, S);
+          const wordRes = await Report.genererWordPV(C, S);
+          overlay.remove();
+          ouvrirPartagePV(pdfRes, wordRes);
+        } catch (err) {
+          console.error(err);
+          action.disabled = false;
+          action.textContent = 'Générer le PV signé';
+          Dialogue.informer('Impossible de générer le PV : ' + (err && err.message ? err.message : err));
+        }
+      });
+    });
+  }
+
+  function ouvrirPartagePV(pdfRes, wordRes) {
+    const dests = destinatairesActifs();
+    const emailClient = String((C.client && C.client.email) || '').trim();
+    if (emailClient && !dests.to.concat(dests.cc).some(e => e.toLowerCase() === emailClient.toLowerCase())) dests.to.push(emailClient);
+    dests.toStr = dests.to.join(', ');
+    dests.ccStr = dests.cc.join(', ');
+    dests.tousStr = dests.to.concat(dests.cc).join(', ');
+    const objet = Report.objetMailPV(C, S);
+    const corps = Report.corpsMailPV(C, S) + '\n\nPièces jointes à ajouter : ' + pdfRes.filename + ' et ' + wordRes.filename + '.';
+    const mailtoUrl = construireUrlMailto(dests, objet, corps);
+    const b = pdfRes.bilan;
+    const html = `<div class="panel">
+      <div class="grab"></div>
+      <h3>PV de fin de chantier — prêt à transmettre</h3>
+      <p class="sub">Document BFR Systems signé · <strong>${b.pctGlobal} %</strong> · ${esc(Report.frDate(b.dateJour))}</p>
+      <div class="card" style="font-size:12px;line-height:1.5;padding:10px 12px;margin-bottom:10px">
+        <strong>À :</strong> ${esc(dests.toStr || 'aucun destinataire configuré')}${dests.ccStr ? `<br><strong>Cc :</strong> ${esc(dests.ccStr)}` : ''}
+      </div>
+      <button type="button" class="menu-item" data-pv-share="share" style="background:#e0f2fe;border:2px solid var(--bfr-primary)">
+        <span class="ico" style="background:var(--bfr-primary);color:#fff">${ICO.send(20)}</span>
+        <span><strong>Envoyer par e-mail / partage</strong><small>Joindre le PDF et le Word si l’appareil le permet</small></span>
+      </button>
+      <div style="text-align:center;margin:7px 0 10px"><a href="${esc(mailtoUrl)}" data-pv-share="mailto" class="small" style="color:var(--bfr-primary);text-decoration:underline;font-size:12px">Ouvrir la messagerie avec les destinataires et le texte préremplis</a></div>
+      <button type="button" class="menu-item" data-pv-share="pdf"><span class="ico">${ICO.download(18)}</span><span>Télécharger le PDF signé — ${esc(pdfRes.filename)}</span></button>
+      <button type="button" class="menu-item" data-pv-share="word"><span class="ico">${ICO.fileText(18)}</span><span>Télécharger le document Word (.docx)</span></button>
+      <button type="button" class="menu-item" data-pv-share="copy"><span class="ico">${ICO.copy(18)}</span><span>Copier l’objet et le texte du mail</span></button>
+      <button type="button" class="btn grey wide" style="margin-top:8px" data-a="fermer">Fermer</button>
+    </div>`;
+    Ouvrir.ouvrir(html, panneau => {
+      panneau.addEventListener('click', async e => {
+        const btn = e.target.closest('[data-pv-share]');
+        if (!btn) return;
+        const action = btn.dataset.pvShare;
+        if (btn.tagName === 'A') e.preventDefault();
+        if (action === 'pdf') { telecharger(pdfRes.blob, pdfRes.filename); toast('PV PDF téléchargé'); }
+        else if (action === 'word') { telecharger(wordRes.blob, wordRes.filename); toast('PV Word téléchargé'); }
+        else if (action === 'copy') copierPressePapiers(objet + '\n\n' + corps, 'Texte de l’e-mail copié');
+        else if (action === 'mailto' || action === 'share') {
+          if (action === 'share' && navigator.share && !dansUnCadre()) {
+            try {
+              const fichiers = [
+                new File([pdfRes.blob], pdfRes.filename, { type: 'application/pdf', lastModified: Date.now() }),
+                new File([wordRes.blob], wordRes.filename, { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', lastModified: Date.now() })
+              ];
+              const peut = !navigator.canShare || navigator.canShare({ files: fichiers });
+              if (peut) {
+                await navigator.share({ files: fichiers, title: objet, text: corps });
+                toast('PV partagé');
+                return;
+              }
+            } catch (err) {
+              if (err && err.name === 'AbortError') return;
+            }
+          }
+          telecharger(pdfRes.blob, pdfRes.filename);
+          telecharger(wordRes.blob, wordRes.filename);
+          toast('PDF et Word téléchargés — ajoute-les au message', 3200);
+          setTimeout(() => { try { window.open(mailtoUrl, '_blank') || (window.location.href = mailtoUrl); } catch (_) {} }, 400);
+        }
+      });
+    });
   }
 
   function rendreTout() {
@@ -3765,6 +4036,8 @@
         afficherApercuPDF();
       } else if (a === 'soumettre') {
         soumettreRapportQuotidien();
+      } else if (a === 'pv-fin') {
+        feuillePV();
       } else if (a === 'word') {
         Report.genererWord(C, S, C.jourActif).then(res => {
           telecharger(res.blob, res.filename);
