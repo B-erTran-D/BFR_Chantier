@@ -999,7 +999,7 @@
       this.saut(hJauge + 62);
       const yJauge = p.y;
       p.rect(this.M, yJauge, this.CW, hJauge, { fill: C.cyanClair, stroke: CYAN, lineWidth: 0.7 });
-      p.text('AVANCEMENT GLOBAL' + (b.estPondere ? ' (PONDERE)' : ''), this.M + 10, yJauge + 13, { size: 8.5, font: 'F2', color: C.navy, bold: true });
+      p.text('AVANCEMENT GLOBAL', this.M + 10, yJauge + 13, { size: 8.5, font: 'F2', color: C.navy, bold: true });
       const txtDroit = b.faitTotal.length + ' / ' + b.total + ' tâche' + (b.total > 1 ? 's' : '') + ' terminée' + (b.faitTotal.length > 1 ? 's' : '') + '  —  ' + b.pctGlobal + ' %';
       p.text(txtDroit, this.W - this.M - 12, yJauge + 13, { size: 9.4, font: 'F2', color: C.navy, align: 'right', bold: true });
 
@@ -1312,8 +1312,6 @@
       const fond = hexClair(st.couleur, 0.92);
       const phNom = b.nomPhase(t);
       const domNom = DOMAINES[t.domaine] || '';
-      const wPoids = poidsTache(t);
-
       let note = '';
       if (mode === 'bloque') {
         const infosBloq = [];
@@ -1331,7 +1329,7 @@
         note = valeur(t.commentaire);
       }
 
-      const titreAffiche = valeur(t.titre) + (wPoids > 1 ? '  (x' + wPoids + ')' : '');
+      const titreAffiche = valeur(t.titre);
       const lignesTitre = Pdf.wrap(titreAffiche, this.CW - 20, 9.8, true);
       const lignesNote = note ? Pdf.wrap(note, this.CW - 22, 9.0) : [];
       const hCarte = 22 + lignesTitre.length * 14 + (lignesNote.length ? lignesNote.length * 13 + 8 : 6) + 7;
@@ -1487,8 +1485,7 @@
         p.y = yp + 16;
 
         ph.taches.forEach(t => {
-          const wP = poidsTache(t);
-          const txtTache = valeur(t.titre) + (wP > 1 ? ' (x' + wP + ')' : '');
+          const txtTache = valeur(t.titre);
           const lignesT = Pdf.wrap(txtTache, colTacheW - 12, 8.7).slice(0, 3);
           const hRow = Math.max(18, lignesT.length * 11 + 6);
           if (p.y + hRow > this.limiteBas()) {
@@ -1613,7 +1610,7 @@
           p.y = yg + 18;
           g.taches.forEach(t => {
             const statut = STATUTS[t.statut] || STATUTS.afaire;
-            const titre = valeur(t.titre) + (poidsTache(t) > 1 ? ' (x' + poidsTache(t) + ')' : '');
+            const titre = valeur(t.titre);
             const details = valeur(t.commentaire);
             const lTitre = Pdf.wrap(titre, this.CW - 105, 8.6, true).slice(0, 3);
             const lDet = details ? Pdf.wrap(details, this.CW - 112, 7.8).slice(0, 2) : [];
