@@ -11004,8 +11004,9 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
     dests.ccStr = dests.cc.join(', ');
     dests.tousStr = dests.to.concat(dests.cc).join(', ');
     const objet = Report.objetMailPV(C, S);
-    const corps = Report.corpsMailPV(C, S) + '\n\nPièces jointes à ajouter : ' + pdfRes.filename + ' et ' + wordRes.filename + '.';
-    const mailtoUrl = construireUrlMailto(dests, objet, corps);
+    const corps = Report.corpsMailPV(C, S);
+    const corpsMailto = corps + '\n\nLe PDF signé a été téléchargé : ajoute-le à ce message avant l’envoi.';
+    const mailtoUrl = construireUrlMailto(dests, objet, corpsMailto);
     const b = pdfRes.bilan;
     const html = `<div class="panel">
       <div class="grab"></div>
@@ -11016,9 +11017,9 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
       </div>
       <button type="button" class="menu-item" data-pv-share="share" style="background:#e0f2fe;border:2px solid var(--bfr-primary)">
         <span class="ico" style="background:var(--bfr-primary);color:#fff">${ICO.send(20)}</span>
-        <span><strong>Envoyer par e-mail / partage</strong><small>Joindre le PDF et le Word si l’appareil le permet</small></span>
+        <span><strong>Envoyer par e-mail — PDF BFR joint</strong><small>Choisir Outlook, Gmail ou une autre application dans le menu de partage</small></span>
       </button>
-      <div style="text-align:center;margin:7px 0 10px"><a href="${esc(mailtoUrl)}" data-pv-share="mailto" class="small" style="color:var(--bfr-primary);text-decoration:underline;font-size:12px">Ouvrir la messagerie avec les destinataires et le texte préremplis</a></div>
+      <div style="text-align:center;margin:7px 0 10px"><a href="${esc(mailtoUrl)}" data-pv-share="mailto" class="small" style="color:var(--bfr-primary);text-decoration:underline;font-size:12px">Ouvrir Outlook / le client e-mail (PDF téléchargé à joindre)</a></div>
       <button type="button" class="menu-item" data-pv-share="pdf"><span class="ico">${ICO.download(18)}</span><span>Télécharger le PDF signé — ${esc(pdfRes.filename)}</span></button>
       <button type="button" class="menu-item" data-pv-share="word"><span class="ico">${ICO.fileText(18)}</span><span>Télécharger le document Word (.docx)</span></button>
       <button type="button" class="menu-item" data-pv-share="copy"><span class="ico">${ICO.copy(18)}</span><span>Copier l’objet et le texte du mail</span></button>
@@ -11029,31 +11030,34 @@ window.LOGO_BFR_TOPBAR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAw
         const btn = e.target.closest('[data-pv-share]');
         if (!btn) return;
         const action = btn.dataset.pvShare;
-        if (btn.tagName === 'A') e.preventDefault();
+        // Sur le lien mailto, laisser le navigateur lancer directement Outlook ou le client déclaré.
         if (action === 'pdf') { telecharger(pdfRes.blob, pdfRes.filename); toast('PV PDF téléchargé'); }
         else if (action === 'word') { telecharger(wordRes.blob, wordRes.filename); toast('PV Word téléchargé'); }
         else if (action === 'copy') copierPressePapiers(objet + '\n\n' + corps, 'Texte de l’e-mail copié');
-        else if (action === 'mailto' || action === 'share') {
-          if (action === 'share' && navigator.share && !dansUnCadre()) {
+        else if (action === 'mailto') {
+          telecharger(pdfRes.blob, pdfRes.filename);
+          toast('PDF téléchargé — ouverture de votre client e-mail…', 3200);
+          // Pas de preventDefault : le href mailto est traité immédiatement au clic,
+          // ce qui permet au système de proposer Outlook ou l'application e-mail configurée.
+        } else if (action === 'share') {
+          const fichierPdf = new File([pdfRes.blob], pdfRes.filename, { type: 'application/pdf', lastModified: Date.now() });
+          let peutShare = false;
+          if (navigator.canShare && !dansUnCadre()) {
+            try { peutShare = navigator.canShare({ files: [fichierPdf] }); } catch (_) { peutShare = false; }
+          }
+          if (peutShare && navigator.share) {
             try {
-              const fichiers = [
-                new File([pdfRes.blob], pdfRes.filename, { type: 'application/pdf', lastModified: Date.now() }),
-                new File([wordRes.blob], wordRes.filename, { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', lastModified: Date.now() })
-              ];
-              const peut = !navigator.canShare || navigator.canShare({ files: fichiers });
-              if (peut) {
-                await navigator.share({ files: fichiers, title: objet, text: corps });
-                toast('PV partagé');
-                return;
-              }
+              await navigator.share({ files: [fichierPdf], title: objet, text: corps });
+              toast('PV PDF partagé');
+              return;
             } catch (err) {
               if (err && err.name === 'AbortError') return;
             }
           }
           telecharger(pdfRes.blob, pdfRes.filename);
-          telecharger(wordRes.blob, wordRes.filename);
-          toast('PDF et Word téléchargés — ajoute-les au message', 3200);
-          setTimeout(() => { try { window.open(mailtoUrl, '_blank') || (window.location.href = mailtoUrl); } catch (_) {} }, 400);
+          toast('PDF téléchargé — ouverture de votre client e-mail…', 3200);
+          // Même solution de repli que le rapport quotidien : mailto avec objet et texte préremplis.
+          try { window.location.href = mailtoUrl; } catch (_) {}
         }
       });
     });
